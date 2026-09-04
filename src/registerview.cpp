@@ -36,46 +36,29 @@ void RegisterView::setupTab(int areaIndex)
     t->setSelectionMode(QAbstractItemView::ExtendedSelection);
     t->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed);
 
-    // 行号使用 Qt 自带的垂直表头，不再单独建立“序号”列
     t->verticalHeader()->setVisible(true);
 
     QStringList headers;
-    headers << "名称" << "寄存器地址" << "数据状态"
-            << "数据类型" << "原始值" << "设定值" << "写入";
+    headers << "寄存器名称" << "寄存器地址" << "数据状态" << "数据类型" << "原始值" << "设定值" << "写入";
     t->setHorizontalHeaderLabels(headers);
-    t->horizontalHeader()->setStretchLastSection(true);
+    t->horizontalHeader()->setStretchLastSection(false);
     t->setColumnWidth(ColName, 120);
     t->setColumnWidth(ColAddr, 90);
     t->setColumnWidth(ColStatus, 70);
     t->setColumnWidth(ColType, 70);
     t->setColumnWidth(ColRaw, 80);
-    // 设定值与写入列始终显示，不可写区域置为禁用状态，以保持表格样式一致
     t->setColumnWidth(ColSet, 80);
     t->setColumnWidth(ColWrite, 60);
-
-    // 表头字体不加粗；行高与表头高度保持一致
-    QFont hdrFont = t->horizontalHeader()->font();
-    hdrFont.setBold(false);
-    t->horizontalHeader()->setFont(hdrFont);
-    t->verticalHeader()->setFont(hdrFont);
-    // 选中行时样式会给选中表头段加粗：关闭表头高亮，并用样式表强制始终正常字重
     t->horizontalHeader()->setHighlightSections(false);
     t->verticalHeader()->setHighlightSections(false);
-    QString hdrStyle = "QHeaderView::section, QHeaderView::section:selected,"
-                       "QHeaderView::section:pressed, QHeaderView::section:hover { font-weight: normal; }";
-    t->horizontalHeader()->setStyleSheet(hdrStyle);
-    t->verticalHeader()->setStyleSheet(hdrStyle);
     int hdrH = t->horizontalHeader()->height();
-    if (hdrH <= 0)
-        hdrH = t->fontMetrics().height() + 8;
-    t->horizontalHeader()->setFixedHeight(hdrH);
-    t->verticalHeader()->setDefaultSectionSize(hdrH);
+    if (hdrH > 0)
+    {
+         t->verticalHeader()->setDefaultSectionSize(hdrH);
+    }
 
-    connect(t, SIGNAL(customContextMenuRequested(QPoint)),
-            this, SLOT(onCustomContextMenu(QPoint)));
-    connect(t, SIGNAL(itemChanged(QTableWidgetItem *)),
-            this, SLOT(onNameChanged(QTableWidgetItem *)));
-
+    connect(t, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(onCustomContextMenu(QPoint)));
+    connect(t, SIGNAL(itemChanged(QTableWidgetItem *)),this, SLOT(onNameChanged(QTableWidgetItem *)));
     m_tables[areaIndex] = t;
 }
 
@@ -133,6 +116,7 @@ void RegisterView::addRegisters(int areaIndex, int startPlc, int count)
         typeCombo->addItems(QStringList() << "BIT" << "U16" << "S16");
         typeCombo->setCurrentIndex((int)def);
         typeCombo->setProperty("row", r);
+        typeCombo->setStyleSheet("border: none;");
         t->setCellWidget(r, ColType, typeCombo);
         connect(typeCombo, SIGNAL(currentIndexChanged(int)),
                 this, SLOT(onTypeChanged(int)));
@@ -140,13 +124,12 @@ void RegisterView::addRegisters(int areaIndex, int startPlc, int count)
         QLineEdit *setEdit = new QLineEdit(t);
         setEdit->setProperty("row", r);
         // 去掉边框与背景，使设定值输入框融入表格样式
-        setEdit->setStyleSheet("border: none; background: transparent;");
+        setEdit->setStyleSheet("border: none;");
         t->setCellWidget(r, ColSet, setEdit);
 
         QPushButton *wbtn = new QPushButton("写入", t);
         wbtn->setProperty("row", r);
-        // 去掉边框与背景，使写入按钮融入表格样式
-        wbtn->setStyleSheet("border: none; background: transparent;");
+       // wbtn->setStyleSheet("border: none;");//"border: none; background: transparent;");
         t->setCellWidget(r, ColWrite, wbtn);
         connect(wbtn, SIGNAL(clicked()), this, SLOT(onWriteClicked()));
 
