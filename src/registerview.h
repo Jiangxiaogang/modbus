@@ -51,7 +51,8 @@ private:
     void onQuickAddInArea(int area);
     void onDeleteRowsInArea(int area, QTableWidget* t);
 
-    enum Col { ColNo=0, ColName, ColAddr, ColStatus, ColType,
+    // 序号由垂直表头（Qt 自带行号）提供，故不再单独建列
+    enum Col { ColName=0, ColAddr, ColStatus, ColType,
                ColRaw, ColSet, ColWrite };
 
     QTabWidget*        m_tabs;

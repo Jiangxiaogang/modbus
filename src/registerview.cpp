@@ -29,31 +29,46 @@ RegisterView::RegisterView(QWidget* parent)
 
 void RegisterView::setupTab(int areaIndex)
 {
-    bool writable = areaInfo(areaIndex).writable;
-    QTableWidget* t = new QTableWidget(0, 8, this);
+    QTableWidget* t = new QTableWidget(0, 7, this);
     t->setContextMenuPolicy(Qt::CustomContextMenu);
     t->setSelectionBehavior(QAbstractItemView::SelectRows);
     t->setSelectionMode(QAbstractItemView::ExtendedSelection);
     t->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed);
 
+    // 行号使用 Qt 自带的垂直表头，不再单独建立“序号”列
+    t->verticalHeader()->setVisible(true);
+
     QStringList headers;
-    headers << "序号" << "名称" << "寄存器地址" << "数据状态"
+    headers << "名称" << "寄存器地址" << "数据状态"
             << "数据类型" << "原始值" << "设定值" << "写入";
     t->setHorizontalHeaderLabels(headers);
     t->horizontalHeader()->setStretchLastSection(true);
-    t->setColumnWidth(ColNo, 45);
     t->setColumnWidth(ColName, 120);
     t->setColumnWidth(ColAddr, 90);
     t->setColumnWidth(ColStatus, 70);
     t->setColumnWidth(ColType, 70);
     t->setColumnWidth(ColRaw, 80);
-    if (writable) {
-        t->setColumnWidth(ColSet, 80);
-        t->setColumnWidth(ColWrite, 60);
-    } else {
-        t->setColumnHidden(ColSet, true);
-        t->setColumnHidden(ColWrite, true);
-    }
+    // 设定值与写入列始终显示，不可写区域置为禁用状态，以保持表格样式一致
+    t->setColumnWidth(ColSet, 80);
+    t->setColumnWidth(ColWrite, 60);
+
+    // 表头字体不加粗；行高与表头高度保持一致
+    QFont hdrFont = t->horizontalHeader()->font();
+    hdrFont.setBold(false);
+    t->horizontalHeader()->setFont(hdrFont);
+    t->verticalHeader()->setFont(hdrFont);
+    // 选中行时样式会给选中表头段加粗：关闭表头高亮，并用样式表强制始终正常字重
+    t->horizontalHeader()->setHighlightSections(false);
+    t->verticalHeader()->setHighlightSections(false);
+    QString hdrStyle = "QHeaderView::section, QHeaderView::section:selected,"
+                        "QHeaderView::section:pressed, QHeaderView::section:hover { font-weight: normal; }";
+    t->horizontalHeader()->setStyleSheet(hdrStyle);
+    t->verticalHeader()->setStyleSheet(hdrStyle);
+    int hdrH = t->horizontalHeader()->height();
+    if (hdrH <= 0)
+        hdrH = t->fontMetrics().height() + 8;
+    t->horizontalHeader()->setFixedHeight(hdrH);
+    t->verticalHeader()->setDefaultSectionSize(hdrH);
 
     connect(t, SIGNAL(customContextMenuRequested(QPoint)),
             this, SLOT(onCustomContextMenu(QPoint)));
@@ -90,7 +105,10 @@ void RegisterView::addRegisters(int areaIndex, int startPlc, int count)
         int proto = plc - base;
 
         RowData rd;
-        rd.name = QString::number(plc);
+        // 0区(遥控) PLC 地址为 00001-09999，名称补前导 0 至 5 位保持对齐
+        rd.name = (areaIndex == 0)
+                ? QString::number(plc).rightJustified(5, '0')
+                : QString::number(plc);
         rd.plcAddr = plc;
         rd.protoAddr = proto;
         rd.valid = false;
@@ -101,7 +119,6 @@ void RegisterView::addRegisters(int areaIndex, int startPlc, int count)
         int r = t->rowCount();
         t->insertRow(r);
 
-        t->setItem(r, ColNo, new QTableWidgetItem(QString::number(r + 1)));
         QTableWidgetItem* name = new QTableWidgetItem(rd.name);
         name->setFlags(name->flags() | Qt::ItemIsEditable);
         t->setItem(r, ColName, name);
@@ -118,15 +135,19 @@ void RegisterView::addRegisters(int areaIndex, int startPlc, int count)
         connect(typeCombo, SIGNAL(currentIndexChanged(int)),
                 this, SLOT(onTypeChanged(int)));
 
-        if (info.writable) {
-            QLineEdit* setEdit = new QLineEdit(t);
-            setEdit->setProperty("row", r);
-            t->setCellWidget(r, ColSet, setEdit);
+        QLineEdit* setEdit = new QLineEdit(t);
+        setEdit->setProperty("row", r);
+        t->setCellWidget(r, ColSet, setEdit);
 
-            QPushButton* wbtn = new QPushButton("写入", t);
-            wbtn->setProperty("row", r);
-            t->setCellWidget(r, ColWrite, wbtn);
-            connect(wbtn, SIGNAL(clicked()), this, SLOT(onWriteClicked()));
+        QPushButton* wbtn = new QPushButton("写入", t);
+        wbtn->setProperty("row", r);
+        t->setCellWidget(r, ColWrite, wbtn);
+        connect(wbtn, SIGNAL(clicked()), this, SLOT(onWriteClicked()));
+
+        // 不可写区域：仍显示设定值与写入按钮，但置为禁用状态
+        if (!info.writable) {
+            setEdit->setEnabled(false);
+            wbtn->setEnabled(false);
         }
     }
     t->setSortingEnabled(false);
@@ -273,10 +294,8 @@ void RegisterView::onDeleteRowsInArea(int area, QTableWidget* t)
         t->removeRow(r);
         m_rows[area].removeAt(r);
     }
-    // 重新编号 + 复位行属性
+    // 复位行内控件属性（行号由垂直表头自动维护，无需手动重排）
     for (int r = 0; r < t->rowCount(); ++r) {
-        if (t->item(r, ColNo))
-            t->item(r, ColNo)->setText(QString::number(r + 1));
         QComboBox* c = qobject_cast<QComboBox*>(t->cellWidget(r, ColType));
         if (c) c->setProperty("row", r);
         QLineEdit* e = qobject_cast<QLineEdit*>(t->cellWidget(r, ColSet));
