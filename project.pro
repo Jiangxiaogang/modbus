@@ -42,3 +42,7 @@ RC_FILE = res/app.rc
 QMAKE_CFLAGS += -std=c11        # C 语言标准
 QMAKE_CXXFLAGS += -std=c++11    # C++ 语言标准
 QMAKE_CXXFLAGS_WARN_ON = -Wall
+
+# 源文件已统一保存为 UTF-8，告知编译器按 UTF-8 读取，避免中文字面量乱码
+QMAKE_CFLAGS += -finput-charset=utf-8
+QMAKE_CXXFLAGS += -finput-charset=utf-8
