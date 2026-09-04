@@ -26,9 +26,10 @@ void ModbusWorker::setConfig(const ModbusConfig &cfg)
         m_timer->setInterval(qMax(50, m_cfg.pollInterval));
 }
 
-void ModbusWorker::connectDevice()
+void ModbusWorker::connectDevice(const ModbusConfig &cfg)
 {
     QMutexLocker lock(&m_mutex);
+    m_cfg = cfg;
     if (m_client)
     {
         m_client->close();

@@ -17,10 +17,10 @@ ModbusClient::~ModbusClient()
 ITransport *ModbusClient::buildTransport(const ModbusConfig &cfg)
 {
     if (cfg.channel == ChannelSerial)
-        return new SerialTransport(cfg.serPortName, cfg.baudRate, cfg.dataBits, cfg.stopBits, cfg.parity);
-    if (cfg.channel == ChannelTcp)
+        return new SerialTransport(cfg.portName, cfg.baudRate, cfg.dataBits, cfg.stopBits, cfg.parity);
+    if (cfg.netType == NetworkTCP)
         return new TcpTransport(cfg.netAddr, cfg.netPort);
-    if (cfg.channel == ChannelUdp)
+    if (cfg.netType == NetworkUDP)
         return new UdpTransport(cfg.netAddr, cfg.netPort);
     return NULL;
 }

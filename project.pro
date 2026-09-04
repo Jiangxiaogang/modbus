@@ -20,7 +20,8 @@ SOURCES += \
     src/udptransport.cpp \
     src/modbusclient.cpp \
     src/modbusworker.cpp \
-    src/serialtransport.cpp
+    src/serialtransport.cpp \
+    src/seriallist.cpp
 
 # Header files
 HEADERS += \
@@ -36,7 +37,8 @@ HEADERS += \
     src/modbusclient.h \
     src/modbusworker.h \
     src/modbustransport.h \
-    src/serialtransport.h
+    src/serialtransport.h \
+    src/seriallist.h
 
 # Windows EXE resource
 RC_FILE = res/app.rc

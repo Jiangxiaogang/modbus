@@ -8,16 +8,22 @@
 enum ChannelType
 {
     ChannelSerial = 0,
-    ChannelTcp,
-    ChannelUdp
+    ChannelNetwork,
+};
+
+// 网络类型
+enum NetworkType
+{
+    NetworkTCP = 0,
+    NetworkUDP
 };
 
 // 协议类型
 enum ProtocolType
 {
-    ProtocolRTU  = 0,   // ModbusRTU
-    ProtocolTCP,        // ModbusTCP
-    ProtocolASCII       // ModbusASCII
+    ProtocolRTU  = 0,
+    ProtocolTCP,
+    ProtocolASCII
 };
 
 // 数据类型
@@ -70,13 +76,14 @@ struct ModbusConfig
     ProtocolType protocol;
 
     // 串口
-    QString serPortName;
+    QString portName;
     int     baudRate;
     int     dataBits;
     int     stopBits;
     int     parity;      // 'N' 'E' 'O'
 
     // 网络
+    NetworkType netType;
     QString netAddr;
     int     netPort;
 
@@ -84,7 +91,8 @@ struct ModbusConfig
     int     slave;            // 从站地址
     int     responseTimeout;  // 响应超时 ms
     int     pollInterval;     // 轮询间隔 ms
-    int     readQuantity;     // 单次读取数量
+    int     readMode;         // 读取模式 0=单点模式/1=批量模式
+    int     readQuantity;
     int     coilWriteFunc;    // 遥控功能码 5 / 15
     int     regWriteFunc;     // 遥调功能码 6 / 16
 };

@@ -19,40 +19,38 @@ public:
     const ModbusConfig& getConfig();
 
 signals:
-    void connectClicked();
+    void connectClicked(const ModbusConfig& config);
     void disconnectClicked();
 
 public slots:
     void setConnected(bool connected);
 
 private slots:
-    void onSerConnectButton();
-    void onNetConnectButton();
+    void onConnectButton();
 
 private:
     void refreshSerialPorts();
-    void buildConfig(ChannelType chan);
+    void buildConfig();
     void setWidgetEnabled(bool enabled);
     bool         m_connected;
     ModbusConfig m_config;
 
+    QComboBox   *m_connCombo;
+    QPushButton *m_connectBtn;
+
     QComboBox   *m_serPortCombo;
     QComboBox   *m_baudRateCombo;
-    QComboBox   *m_dataBitsCombo;
-    QComboBox   *m_stopBitsCombo;
     QComboBox   *m_parityCombo;
-    QPushButton *m_serConnectBtn;
 
     QComboBox   *m_netTypeCombo;
     QLineEdit   *m_netAddrEdit;
     QSpinBox    *m_netPortSpin;
-    QPushButton *m_netConnectBtn;
 
     QComboBox   *m_protoCombo;
     QSpinBox    *m_slaveSpin;
     QSpinBox    *m_timeoutSpin;
     QSpinBox    *m_pollSpin;
-    QSpinBox    *m_quantSpin;
+    QComboBox   *m_readModeCombo;
     QComboBox   *m_coilFuncCombo;
     QComboBox   *m_regFuncCombo;
 };

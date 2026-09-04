@@ -21,8 +21,6 @@ MainWindow::MainWindow(QWidget *parent)
     QSplitter *split = new QSplitter(Qt::Horizontal, this);
     m_panel = new ConnectionPanel(split);
     m_view  = new RegisterView(split);
-    m_panel->setMinimumWidth(120);
-    m_panel->setMaximumWidth(240);
     split->setStretchFactor(0, 0);
     split->setStretchFactor(1, 1);
     setCentralWidget(split);

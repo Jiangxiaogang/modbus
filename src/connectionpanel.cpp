@@ -1,5 +1,6 @@
 #include "connectionpanel.h"
 #include "modbusdefs.h"
+#include "seriallist.h"
 
 #include <QComboBox>
 #include <QLineEdit>
@@ -11,41 +12,6 @@
 #include <QVBoxLayout>
 #include <QIntValidator>
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-
-static QStringList getSerialPorts()
-{
-    QStringList ports;
-    HKEY hKey;
-    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, "HARDWARE\\DEVICEMAP\\SERIALCOMM", 0, KEY_QUERY_VALUE, &hKey) == ERROR_SUCCESS)
-    {
-        char name[256];
-        char val[256];
-        DWORD nameLen, valLen, type;
-        for (DWORD i = 0; ; ++i)
-        {
-            nameLen = sizeof(name);
-            valLen = sizeof(val);
-            LONG r = RegEnumValueA(hKey, i, name, &nameLen, 0, &type, (LPBYTE)val, &valLen);
-            if (r != ERROR_SUCCESS) break;
-            ports.append(QString::fromLocal8Bit(val, valLen));
-        }
-        RegCloseKey(hKey);
-    }
-    if (ports.isEmpty())
-    {
-        for (int i = 1; i <= 20; ++i)
-            ports.append(QString("COM%1").arg(i));
-    }
-    return ports;
-}
-
 ConnectionPanel::ConnectionPanel(QWidget *parent)
     : QWidget(parent)
     , m_connected(false)
@@ -53,54 +19,62 @@ ConnectionPanel::ConnectionPanel(QWidget *parent)
     QVBoxLayout *root = new QVBoxLayout(this);
     root->setMargin(4);
 
-    // ---------- 串口通道配置 ----------
-    QGroupBox *serChanGrp = new QGroupBox("串口通道", this);
-    QFormLayout *serChanLayout = new QFormLayout(serChanGrp);
+    // ---------- 通道配置 ----------
+    QGroupBox *connGrp = new QGroupBox("通道配置", this);
+    QFormLayout *connLayout = new QFormLayout(connGrp);
 
-    m_serPortCombo = new QComboBox(serChanGrp);
+    m_connCombo = new QComboBox(connGrp);
+    m_connCombo->addItem("串口");
+    m_connCombo->addItem("网络");
+    m_connCombo->setCurrentIndex(0);
+
+    m_connectBtn = new QPushButton("连接(&C)", connGrp);
+
+    QHBoxLayout *connOpsLayout = new QHBoxLayout;
+    connOpsLayout->addWidget(m_connCombo);
+    connOpsLayout->addWidget(m_connectBtn);
+    connOpsLayout->setStretchFactor(m_connCombo, 1);
+    connOpsLayout->setStretchFactor(m_connectBtn, 1);
+
+    connLayout->addRow("连接方式:", connOpsLayout);
+
+    // ---------- 串口通道配置 ----------
+    QGroupBox *serGrp = new QGroupBox("串口配置", this);
+    QFormLayout *serLayout = new QFormLayout(serGrp);
+
+    m_serPortCombo = new QComboBox(serGrp);
     refreshSerialPorts();
-    m_baudRateCombo = new QComboBox(serChanGrp);
+
+    m_baudRateCombo = new QComboBox(serGrp);
     m_baudRateCombo->setEditable(true);
     QStringList bauds;
     bauds << "1200" << "2400" << "4800" << "9600" << "19200" << "38400" << "57600" << "115200";
     m_baudRateCombo->addItems(bauds);
     m_baudRateCombo->setCurrentIndex(3);
-    m_dataBitsCombo = new QComboBox(serChanGrp);
-    m_dataBitsCombo->addItems(QStringList() << "7" << "8");
-    m_dataBitsCombo->setCurrentIndex(3);
-    m_stopBitsCombo = new QComboBox(serChanGrp);
-    m_stopBitsCombo->addItems(QStringList() << "1" << "2");
-    m_stopBitsCombo->setCurrentIndex(0);
-    m_parityCombo = new QComboBox(serChanGrp);
-    m_parityCombo->addItems(QStringList() << "无(N)" << "奇校验(O)" << "偶校验(E)");
+    m_parityCombo = new QComboBox(serGrp);
+    m_parityCombo->addItems(QStringList() << "无" << "奇校验" << "偶校验");
     m_parityCombo->setCurrentIndex(0);
-    m_serConnectBtn = new QPushButton("连接(&S)", serChanGrp);
 
-    serChanLayout->addRow("串口号:", m_serPortCombo);
-    serChanLayout->addRow("波特率:", m_baudRateCombo);
-    serChanLayout->addRow("数据位:", m_dataBitsCombo);
-    serChanLayout->addRow("停止位:", m_stopBitsCombo);
-    serChanLayout->addRow("校验位:", m_parityCombo);
-    serChanLayout->addRow(m_serConnectBtn);
+    serLayout->addRow("串口号:", m_serPortCombo);
+    serLayout->addRow("波特率:", m_baudRateCombo);
+    serLayout->addRow("校验位:", m_parityCombo);
 
     // ---------- 网络通道配置 ----------
-    QGroupBox *netChanGrp = new QGroupBox("网络通道", this);
-    QFormLayout *netChanLayout = new QFormLayout(netChanGrp);
+    QGroupBox *netGrp = new QGroupBox("网络配置", this);
+    QFormLayout *netLayout = new QFormLayout(netGrp);
 
-    m_netTypeCombo = new QComboBox(netChanGrp);
+    m_netTypeCombo = new QComboBox(netGrp);
     m_netTypeCombo->addItem("TCP");
     m_netTypeCombo->addItem("UDP");
-
-    m_netAddrEdit = new QLineEdit("127.0.0.1", netChanGrp);
-    m_netPortSpin = new QSpinBox(netChanGrp);
+    m_netTypeCombo->setCurrentIndex(0);
+    m_netAddrEdit = new QLineEdit("127.0.0.1", netGrp);
+    m_netPortSpin = new QSpinBox(netGrp);
     m_netPortSpin->setRange(1, 65535);
     m_netPortSpin->setValue(502);
-    m_netConnectBtn = new QPushButton("连接(&N)", netChanGrp);
 
-    netChanLayout->addRow("网络协议:", m_netTypeCombo);
-    netChanLayout->addRow("IP地址:", m_netAddrEdit);
-    netChanLayout->addRow("端口号:", m_netPortSpin);
-    netChanLayout->addRow(m_netConnectBtn);
+    netLayout->addRow("网络协议:", m_netTypeCombo);
+    netLayout->addRow("IP地址:", m_netAddrEdit);
+    netLayout->addRow("端口号:", m_netPortSpin);
 
     // ---------- 协议配置 ----------
     QGroupBox *protoGrp = new QGroupBox("协议配置", this);
@@ -129,35 +103,35 @@ ConnectionPanel::ConnectionPanel(QWidget *parent)
     m_pollSpin->setSuffix(" ms");
     pf->addRow("轮询间隔:", m_pollSpin);
 
-    m_quantSpin = new QSpinBox(protoGrp);
-    m_quantSpin->setRange(1, 127);
-    m_quantSpin->setValue(127);
-    pf->addRow("单次读取数量:", m_quantSpin);
+    m_readModeCombo = new QComboBox(protoGrp);
+    m_readModeCombo->addItem("单点模式");
+    m_readModeCombo->addItem("批量模式");
+    pf->addRow("读取模式:", m_readModeCombo);
 
     m_coilFuncCombo = new QComboBox(protoGrp);
     m_coilFuncCombo->addItem("05");
     m_coilFuncCombo->addItem("15");
-    pf->addRow("遥控功能码:", m_coilFuncCombo);
+    pf->addRow("遥控命令:", m_coilFuncCombo);
 
     m_regFuncCombo = new QComboBox(protoGrp);
     m_regFuncCombo->addItem("06");
     m_regFuncCombo->addItem("16");
-    pf->addRow("遥调功能码:", m_regFuncCombo);
+    pf->addRow("遥调命令:", m_regFuncCombo);
 
-    root->addWidget(serChanGrp);
-    root->addWidget(netChanGrp);
+    root->addWidget(connGrp);
+    root->addWidget(serGrp);
+    root->addWidget(netGrp);
     root->addWidget(protoGrp);
     root->addStretch(1);
 
     // 信号连接
-    connect(m_serConnectBtn, SIGNAL(clicked()), this, SLOT(onSerConnectButton()));
-    connect(m_netConnectBtn, SIGNAL(clicked()), this, SLOT(onNetConnectButton()));
+    connect(m_connectBtn, SIGNAL(clicked()), this, SLOT(onConnectButton()));
 }
 
 void ConnectionPanel::refreshSerialPorts()
 {
     m_serPortCombo->clear();
-    m_serPortCombo->addItems(getSerialPorts());
+    m_serPortCombo->addItems(SerialList::getSerialPorts());
 }
 
 const ModbusConfig& ConnectionPanel::getConfig()
@@ -165,51 +139,48 @@ const ModbusConfig& ConnectionPanel::getConfig()
     return m_config;
 }
 
-void ConnectionPanel::buildConfig(ChannelType chan)
+void ConnectionPanel::buildConfig()
 {
-    m_config.channel         = chan;
+    m_config.channel         = (ChannelType)m_connCombo->currentIndex();
     m_config.protocol        = (ProtocolType)m_protoCombo->currentIndex();
-    m_config.serPortName     = m_serPortCombo->currentText();
+    m_config.portName        = m_serPortCombo->currentText();
     m_config.baudRate        = m_baudRateCombo->currentText().toInt();
-    m_config.dataBits        = m_dataBitsCombo->currentText().toInt();
-    m_config.stopBits        = m_stopBitsCombo->currentText().toInt();
+    m_config.dataBits        = 8;
+    m_config.stopBits        = 1;
     m_config.parity          = m_parityCombo->currentIndex();
-
+    m_config.netType         = (NetworkType)m_netTypeCombo->currentIndex();
     m_config.netAddr         = m_netAddrEdit->text();
     m_config.netPort         = m_netPortSpin->value();
 
     m_config.slave           = m_slaveSpin->value();
     m_config.responseTimeout = m_timeoutSpin->value();
     m_config.pollInterval    = m_pollSpin->value();
-    m_config.readQuantity    = m_quantSpin->value();
+    m_config.readQuantity    = m_readModeCombo->currentIndex();
     m_config.coilWriteFunc   = m_coilFuncCombo->currentText().toInt();
     m_config.regWriteFunc    = m_regFuncCombo->currentText().toInt();
 }
 
 void ConnectionPanel::setWidgetEnabled(bool enabled)
 {
+    m_connCombo->setEnabled(enabled);
     m_serPortCombo->setEnabled(enabled);
     m_baudRateCombo->setEnabled(enabled);
-    m_dataBitsCombo->setEnabled(enabled);
-    m_stopBitsCombo->setEnabled(enabled);
     m_parityCombo->setEnabled(enabled);
-    m_serConnectBtn->setEnabled(enabled);
 
     m_netTypeCombo->setEnabled(enabled);
     m_netAddrEdit->setEnabled(enabled);
     m_netPortSpin->setEnabled(enabled);
-    m_netConnectBtn->setEnabled(enabled);
 
     m_protoCombo->setEnabled(enabled);
     m_slaveSpin->setEnabled(enabled);
     m_timeoutSpin->setEnabled(enabled);
     m_pollSpin->setEnabled(enabled);
-    m_quantSpin->setEnabled(enabled);
+    m_readModeCombo->setEnabled(enabled);
     m_coilFuncCombo->setEnabled(enabled);
     m_regFuncCombo->setEnabled(enabled);
 }
 
-void ConnectionPanel::onSerConnectButton()
+void ConnectionPanel::onConnectButton()
 {
     if (m_connected)
     {
@@ -217,42 +188,18 @@ void ConnectionPanel::onSerConnectButton()
     }
     else
     {
+        m_connectBtn->setText("正在连接...");
+        m_connectBtn->setEnabled(false);
         setWidgetEnabled(false);
-        buildConfig(ChannelSerial);
-        emit connectClicked();
-    }
-}
-
-void ConnectionPanel::onNetConnectButton()
-{
-    if (m_connected)
-    {
-        emit disconnectClicked();
-    }
-    else
-    {
-        int type = m_netTypeCombo->currentIndex();
-        setWidgetEnabled(false);
-        buildConfig(type ? ChannelTcp : ChannelUdp);
-        emit connectClicked();
+        buildConfig();
+        emit connectClicked(m_config);
     }
 }
 
 void ConnectionPanel::setConnected(bool connected)
 {
     m_connected = connected;
-    if(!connected)
-    {
-        setWidgetEnabled(true);
-    }
-    if(m_config.channel == ChannelSerial)
-    {
-        m_serConnectBtn->setText(connected ? "断开" : "连接");
-        m_serConnectBtn->setEnabled(true);
-    }
-    else
-    {
-        m_netConnectBtn->setText(connected ? "断开" : "连接");
-        m_netConnectBtn->setEnabled(true);
-    }
+    setWidgetEnabled(!connected);
+    m_connectBtn->setText(connected ? "断开" : "连接");
+    m_connectBtn->setEnabled(true);
 }
