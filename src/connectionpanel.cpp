@@ -192,7 +192,7 @@ void ConnectionPanel::onConnectButton()
         m_connectBtn->setEnabled(false);
         setWidgetEnabled(false);
         buildConfig();
-        emit connectClicked(m_config);
+        emit connectClicked(&m_config);
     }
 }
 

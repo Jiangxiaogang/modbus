@@ -28,7 +28,7 @@ public:
 
 signals:
     // 某区读取计划变化（增删/改类型）
-    void planChanged(int areaIndex, const QList<RegPlanItem> &items);
+    void planChanged(int areaIndex, QList<RegPlanItem> *items);
     // 请求写入某点
     void writeRequested(int areaIndex, int protoAddr, DataType type, qint64 value);
 

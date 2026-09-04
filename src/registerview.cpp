@@ -163,13 +163,13 @@ void RegisterView::addRegisters(int areaIndex, int startPlc, int count)
 
 void RegisterView::rebuildPlan(int areaIndex)
 {
-    QList<RegPlanItem> items;
+    QList<RegPlanItem> *items = new QList<RegPlanItem>();
     foreach (const RowData &rd, m_rows[areaIndex])
     {
         RegPlanItem it;
         it.address = rd.protoAddr;
         it.type = rd.type;
-        items.append(it);
+        items->append(it);
     }
     emit planChanged(areaIndex, items);
 }

@@ -19,7 +19,7 @@ public:
     const ModbusConfig& getConfig();
 
 signals:
-    void connectClicked(const ModbusConfig& config);
+    void connectClicked(ModbusConfig *config);
     void disconnectClicked();
 
 public slots:

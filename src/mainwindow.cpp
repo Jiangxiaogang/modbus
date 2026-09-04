@@ -39,11 +39,11 @@ MainWindow::MainWindow(QWidget *parent)
     m_thread->start();
 
     // 面板 -> 工作线程
-    connect(m_panel, SIGNAL(connectClicked()), m_worker, SLOT(connectDevice()));
+    connect(m_panel, SIGNAL(connectClicked(ModbusConfig*)), m_worker, SLOT(connectDevice(ModbusConfig*)));
     connect(m_panel, SIGNAL(disconnectClicked()), m_worker, SLOT(disconnectDevice()));
 
     // 数据区 -> 工作线程
-    connect(m_view, SIGNAL(planChanged(int, QList<RegPlanItem>)), m_worker, SLOT(setAreaPlan(int, QList<RegPlanItem>)));
+    connect(m_view, SIGNAL(planChanged(int, QList<RegPlanItem>*)), m_worker, SLOT(setAreaPlan(int, QList<RegPlanItem>*)));
     connect(m_view, SIGNAL(writeRequested(int, int, DataType, qint64)), m_worker, SLOT(writeRegister(int, int, DataType, qint64)));
 
     // 工作线程 -> UI

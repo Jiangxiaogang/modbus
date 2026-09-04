@@ -19,9 +19,9 @@ public:
 
 public slots:
     void setConfig(const ModbusConfig &cfg);
-    void connectDevice(const ModbusConfig &cfg);
+    void connectDevice(ModbusConfig *cfg);
     void disconnectDevice();
-    void setAreaPlan(int areaIndex, const QList<RegPlanItem> &items);
+    void setAreaPlan(int areaIndex, QList<RegPlanItem> *items);
     void writeRegister(int areaIndex, int address, DataType type, qint64 value);
 
 signals:

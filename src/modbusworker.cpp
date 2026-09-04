@@ -26,10 +26,10 @@ void ModbusWorker::setConfig(const ModbusConfig &cfg)
         m_timer->setInterval(qMax(50, m_cfg.pollInterval));
 }
 
-void ModbusWorker::connectDevice(const ModbusConfig &cfg)
+void ModbusWorker::connectDevice(ModbusConfig *cfg)
 {
     QMutexLocker lock(&m_mutex);
-    m_cfg = cfg;
+    m_cfg = *cfg;
     if (m_client)
     {
         m_client->close();
@@ -73,11 +73,12 @@ void ModbusWorker::disconnectDevice()
     emit connectionStateChanged(false);
 }
 
-void ModbusWorker::setAreaPlan(int areaIndex, const QList<RegPlanItem> &items)
+void ModbusWorker::setAreaPlan(int areaIndex, QList<RegPlanItem> *items)
 {
     if (areaIndex < 0 || areaIndex > 3) return;
     QMutexLocker lock(&m_mutex);
-    m_plans[areaIndex] = items;
+    m_plans[areaIndex] = *items;
+    delete items;
 }
 
 void ModbusWorker::doPoll()
