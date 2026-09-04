@@ -1,0 +1,41 @@
+# ---------- Qt / qmake 生成物 ----------
+Makefile
+Makefile.Debug
+Makefile.Release
+*.o
+*.obj
+*.res
+*.rcc
+moc_*.cpp
+moc_*.h
+ui_*.h
+qrc_*.cpp
+object_script.*.Debug
+object_script.*.Release
+.qmake.stash
+.qmake.cache
+*.pro.user
+*.pro.user.*
+
+# ---------- 编译输出 ----------
+debug/
+release/
+bin/
+build/
+
+# ---------- 可执行文件 / 动态库 ----------
+*.exe
+*.dll
+*.a
+*.lib
+
+# ---------- IDE ----------
+.vs/
+.vscode/
+*.user
+*.suo
+*~
+
+# ---------- 系统 ----------
+.DS_Store
+Thumbs.db
