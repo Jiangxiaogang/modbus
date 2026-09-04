@@ -12,15 +12,16 @@
 #include <QHeaderView>
 #include <QVBoxLayout>
 
-RegisterView::RegisterView(QWidget* parent)
+RegisterView::RegisterView(QWidget *parent)
     : QWidget(parent)
 {
-    QVBoxLayout* v = new QVBoxLayout(this);
+    QVBoxLayout *v = new QVBoxLayout(this);
     v->setMargin(4);
     m_tabs = new QTabWidget(this);
     v->addWidget(m_tabs);
 
-    for (int a = 0; a < 4; ++a) {
+    for (int a = 0; a < 4; ++a)
+    {
         setupTab(a);
         m_tabs->addTab(m_tables[a], areaInfo(a).name);
     }
@@ -29,7 +30,7 @@ RegisterView::RegisterView(QWidget* parent)
 
 void RegisterView::setupTab(int areaIndex)
 {
-    QTableWidget* t = new QTableWidget(0, 7, this);
+    QTableWidget *t = new QTableWidget(0, 7, this);
     t->setContextMenuPolicy(Qt::CustomContextMenu);
     t->setSelectionBehavior(QAbstractItemView::SelectRows);
     t->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -61,7 +62,7 @@ void RegisterView::setupTab(int areaIndex)
     t->horizontalHeader()->setHighlightSections(false);
     t->verticalHeader()->setHighlightSections(false);
     QString hdrStyle = "QHeaderView::section, QHeaderView::section:selected,"
-                        "QHeaderView::section:pressed, QHeaderView::section:hover { font-weight: normal; }";
+                       "QHeaderView::section:pressed, QHeaderView::section:hover { font-weight: normal; }";
     t->horizontalHeader()->setStyleSheet(hdrStyle);
     t->verticalHeader()->setStyleSheet(hdrStyle);
     int hdrH = t->horizontalHeader()->height();
@@ -72,8 +73,8 @@ void RegisterView::setupTab(int areaIndex)
 
     connect(t, SIGNAL(customContextMenuRequested(QPoint)),
             this, SLOT(onCustomContextMenu(QPoint)));
-    connect(t, SIGNAL(itemChanged(QTableWidgetItem*)),
-            this, SLOT(onNameChanged(QTableWidgetItem*)));
+    connect(t, SIGNAL(itemChanged(QTableWidgetItem *)),
+            this, SLOT(onNameChanged(QTableWidgetItem *)));
 
     m_tables[areaIndex] = t;
 }
@@ -83,7 +84,7 @@ void RegisterView::onTabChanged(int /*index*/)
     // 切换页时无需操作
 }
 
-int RegisterView::areaOf(QTableWidget* table) const
+int RegisterView::areaOf(QTableWidget *table) const
 {
     for (int a = 0; a < 4; ++a)
         if (m_tables[a] == table) return a;
@@ -92,13 +93,14 @@ int RegisterView::areaOf(QTableWidget* table) const
 
 void RegisterView::addRegisters(int areaIndex, int startPlc, int count)
 {
-    QTableWidget* t = m_tables[areaIndex];
-    const AreaInfo& info = areaInfo(areaIndex);
+    QTableWidget *t = m_tables[areaIndex];
+    const AreaInfo &info = areaInfo(areaIndex);
     DataType def = (info.readFunc == 1 || info.readFunc == 2) ? TypeBIT : TypeU16;
 
     int base = info.plcBase;
     t->setSortingEnabled(false);
-    for (int i = 0; i < count; ++i) {
+    for (int i = 0; i < count; ++i)
+    {
         int plc = startPlc + i;
         if (plc < base || plc > base + 9998)
             continue;
@@ -107,8 +109,8 @@ void RegisterView::addRegisters(int areaIndex, int startPlc, int count)
         RowData rd;
         // 0区(遥控) PLC 地址为 00001-09999，名称补前导 0 至 5 位保持对齐
         rd.name = (areaIndex == 0)
-                ? QString::number(plc).rightJustified(5, '0')
-                : QString::number(plc);
+                  ? QString::number(plc).rightJustified(5, '0')
+                  : QString::number(plc);
         rd.plcAddr = plc;
         rd.protoAddr = proto;
         rd.valid = false;
@@ -119,7 +121,7 @@ void RegisterView::addRegisters(int areaIndex, int startPlc, int count)
         int r = t->rowCount();
         t->insertRow(r);
 
-        QTableWidgetItem* name = new QTableWidgetItem(rd.name);
+        QTableWidgetItem *name = new QTableWidgetItem(rd.name);
         name->setFlags(name->flags() | Qt::ItemIsEditable);
         t->setItem(r, ColName, name);
         t->setItem(r, ColAddr, new QTableWidgetItem(formatAddr(proto)));
@@ -127,7 +129,7 @@ void RegisterView::addRegisters(int areaIndex, int startPlc, int count)
         t->item(r, ColStatus)->setTextColor(Qt::red);
         t->setItem(r, ColRaw, new QTableWidgetItem(""));
 
-        QComboBox* typeCombo = new QComboBox(t);
+        QComboBox *typeCombo = new QComboBox(t);
         typeCombo->addItems(QStringList() << "BIT" << "U16" << "S16");
         typeCombo->setCurrentIndex((int)def);
         typeCombo->setProperty("row", r);
@@ -135,17 +137,22 @@ void RegisterView::addRegisters(int areaIndex, int startPlc, int count)
         connect(typeCombo, SIGNAL(currentIndexChanged(int)),
                 this, SLOT(onTypeChanged(int)));
 
-        QLineEdit* setEdit = new QLineEdit(t);
+        QLineEdit *setEdit = new QLineEdit(t);
         setEdit->setProperty("row", r);
+        // 去掉边框与背景，使设定值输入框融入表格样式
+        setEdit->setStyleSheet("border: none; background: transparent;");
         t->setCellWidget(r, ColSet, setEdit);
 
-        QPushButton* wbtn = new QPushButton("写入", t);
+        QPushButton *wbtn = new QPushButton("写入", t);
         wbtn->setProperty("row", r);
+        // 去掉边框与背景，使写入按钮融入表格样式
+        wbtn->setStyleSheet("border: none; background: transparent;");
         t->setCellWidget(r, ColWrite, wbtn);
         connect(wbtn, SIGNAL(clicked()), this, SLOT(onWriteClicked()));
 
         // 不可写区域：仍显示设定值与写入按钮，但置为禁用状态
-        if (!info.writable) {
+        if (!info.writable)
+        {
             setEdit->setEnabled(false);
             wbtn->setEnabled(false);
         }
@@ -157,7 +164,8 @@ void RegisterView::addRegisters(int areaIndex, int startPlc, int count)
 void RegisterView::rebuildPlan(int areaIndex)
 {
     QList<RegPlanItem> items;
-    foreach (const RowData& rd, m_rows[areaIndex]) {
+    foreach (const RowData &rd, m_rows[areaIndex])
+    {
         RegPlanItem it;
         it.address = rd.protoAddr;
         it.type = rd.type;
@@ -168,9 +176,9 @@ void RegisterView::rebuildPlan(int areaIndex)
 
 void RegisterView::onTypeChanged(int /*index*/)
 {
-    QComboBox* combo = qobject_cast<QComboBox*>(sender());
+    QComboBox *combo = qobject_cast<QComboBox *>(sender());
     if (!combo) return;
-    QTableWidget* t = qobject_cast<QTableWidget*>(combo->parent());
+    QTableWidget *t = qobject_cast<QTableWidget *>(combo->parent());
     if (!t) return;
     int area = areaOf(t);
     int row = combo->property("row").toInt();
@@ -179,10 +187,10 @@ void RegisterView::onTypeChanged(int /*index*/)
     rebuildPlan(area);
 }
 
-void RegisterView::onNameChanged(QTableWidgetItem* item)
+void RegisterView::onNameChanged(QTableWidgetItem *item)
 {
     if (!item || item->column() != ColName) return;
-    QTableWidget* t = item->tableWidget();
+    QTableWidget *t = item->tableWidget();
     int area = areaOf(t);
     int row = item->row();
     if (area < 0 || row < 0 || row >= m_rows[area].size()) return;
@@ -191,20 +199,21 @@ void RegisterView::onNameChanged(QTableWidgetItem* item)
 
 void RegisterView::onWriteClicked()
 {
-    QPushButton* btn = qobject_cast<QPushButton*>(sender());
+    QPushButton *btn = qobject_cast<QPushButton *>(sender());
     if (!btn) return;
-    QTableWidget* t = qobject_cast<QTableWidget*>(btn->parent());
+    QTableWidget *t = qobject_cast<QTableWidget *>(btn->parent());
     if (!t) return;
     int area = areaOf(t);
     int row = btn->property("row").toInt();
     if (area < 0 || row < 0 || row >= m_rows[area].size()) return;
 
-    RowData& rd = m_rows[area][row];
-    QLineEdit* setEdit = qobject_cast<QLineEdit*>(t->cellWidget(row, ColSet));
+    RowData &rd = m_rows[area][row];
+    QLineEdit *setEdit = qobject_cast<QLineEdit *>(t->cellWidget(row, ColSet));
     if (!setEdit) return;
     bool ok = false;
     qint64 val = setEdit->text().toLongLong(&ok);
-    if (!ok) {
+    if (!ok)
+    {
         btn->setText("错误");
         return;
     }
@@ -215,39 +224,42 @@ void RegisterView::onWriteClicked()
 void RegisterView::onReadResult(int areaIndex, int protoAddr, bool valid, qint64 value)
 {
     if (areaIndex < 0 || areaIndex > 3) return;
-    QTableWidget* t = m_tables[areaIndex];
+    QTableWidget *t = m_tables[areaIndex];
     int row = findRow(t, protoAddr);
     if (row < 0) return;
-    RowData& rd = m_rows[areaIndex][row];
+    RowData &rd = m_rows[areaIndex][row];
     rd.valid = valid;
     rd.rawValue = value;
 
-    QTableWidgetItem* st = t->item(row, ColStatus);
-    QTableWidgetItem* raw = t->item(row, ColRaw);
-    if (valid) {
+    QTableWidgetItem *st = t->item(row, ColStatus);
+    QTableWidgetItem *raw = t->item(row, ColRaw);
+    if (valid)
+    {
         st->setText("有效");
         st->setTextColor(Qt::darkGreen);
         raw->setText(QString::number(value));
-    } else {
+    }
+    else
+    {
         st->setText("无效");
         st->setTextColor(Qt::red);
         raw->setText("");
     }
 }
 
-void RegisterView::onWriteResult(int areaIndex, int protoAddr, bool ok, const QString& msg)
+void RegisterView::onWriteResult(int areaIndex, int protoAddr, bool ok, const QString &msg)
 {
     if (areaIndex < 0 || areaIndex > 3) return;
-    QTableWidget* t = m_tables[areaIndex];
+    QTableWidget *t = m_tables[areaIndex];
     int row = findRow(t, protoAddr);
     if (row < 0) return;
-    QPushButton* btn = qobject_cast<QPushButton*>(t->cellWidget(row, ColWrite));
+    QPushButton *btn = qobject_cast<QPushButton *>(t->cellWidget(row, ColWrite));
     if (btn)
         btn->setText(ok ? "成功" : "失败");
     Q_UNUSED(msg);
 }
 
-int RegisterView::findRow(QTableWidget* table, int protoAddr) const
+int RegisterView::findRow(QTableWidget *table, int protoAddr) const
 {
     int area = areaOf(table);
     if (area < 0) return -1;
@@ -256,18 +268,18 @@ int RegisterView::findRow(QTableWidget* table, int protoAddr) const
     return -1;
 }
 
-void RegisterView::onCustomContextMenu(const QPoint& pos)
+void RegisterView::onCustomContextMenu(const QPoint &pos)
 {
-    QTableWidget* t = qobject_cast<QTableWidget*>(sender());
+    QTableWidget *t = qobject_cast<QTableWidget *>(sender());
     if (!t) return;
     int area = areaOf(t);
     if (area < 0) return;
     QPoint gpos = t->viewport()->mapToGlobal(pos);
 
     QMenu menu(this);
-    QAction* addAct = menu.addAction("快速添加...");
-    QAction* delAct = menu.addAction("删除点位");
-    QAction* chosen = menu.exec(gpos);
+    QAction *addAct = menu.addAction("快速添加...");
+    QAction *delAct = menu.addAction("删除点位");
+    QAction *chosen = menu.exec(gpos);
     if (!chosen) return;
     if (chosen == addAct)
         onQuickAddInArea(area);
@@ -282,25 +294,27 @@ void RegisterView::onQuickAddInArea(int area)
         addRegisters(area, dlg.startPlc(), dlg.count());
 }
 
-void RegisterView::onDeleteRowsInArea(int area, QTableWidget* t)
+void RegisterView::onDeleteRowsInArea(int area, QTableWidget *t)
 {
-    QList<QTableWidgetItem*> sel = t->selectedItems();
+    QList<QTableWidgetItem *> sel = t->selectedItems();
     if (sel.isEmpty()) return;
     QList<int> rows;
-    foreach (QTableWidgetItem* it, sel)
+    foreach (QTableWidgetItem *it, sel)
         if (!rows.contains(it->row())) rows.append(it->row());
     qSort(rows.begin(), rows.end(), qGreater<int>()); // 从后往前删
-    foreach (int r, rows) {
+    foreach (int r, rows)
+    {
         t->removeRow(r);
         m_rows[area].removeAt(r);
     }
     // 复位行内控件属性（行号由垂直表头自动维护，无需手动重排）
-    for (int r = 0; r < t->rowCount(); ++r) {
-        QComboBox* c = qobject_cast<QComboBox*>(t->cellWidget(r, ColType));
+    for (int r = 0; r < t->rowCount(); ++r)
+    {
+        QComboBox *c = qobject_cast<QComboBox *>(t->cellWidget(r, ColType));
         if (c) c->setProperty("row", r);
-        QLineEdit* e = qobject_cast<QLineEdit*>(t->cellWidget(r, ColSet));
+        QLineEdit *e = qobject_cast<QLineEdit *>(t->cellWidget(r, ColSet));
         if (e) e->setProperty("row", r);
-        QPushButton* b = qobject_cast<QPushButton*>(t->cellWidget(r, ColWrite));
+        QPushButton *b = qobject_cast<QPushButton *>(t->cellWidget(r, ColWrite));
         if (b) b->setProperty("row", r);
     }
     rebuildPlan(area);

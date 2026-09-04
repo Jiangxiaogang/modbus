@@ -14,12 +14,13 @@ SOURCES += \
     src/connectionpanel.cpp \
     src/registerview.cpp \
     src/addregisterdialog.cpp \
-    src/modbus/modbusdefs.cpp \
-    src/modbus/modbuscodec.cpp \
-    src/modbus/serialtransport.cpp \
-    src/modbus/networktransport.cpp \
-    src/modbus/modbusclient.cpp \
-    src/modbus/modbusworker.cpp
+    src/modbusdefs.cpp \
+    src/modbuscodec.cpp \
+    src/tcptransport.cpp \
+    src/udptransport.cpp \
+    src/modbusclient.cpp \
+    src/modbusworker.cpp \
+    src/serialtransport.cpp
 
 # Header files
 HEADERS += \
@@ -27,13 +28,15 @@ HEADERS += \
     src/connectionpanel.h \
     src/registerview.h \
     src/addregisterdialog.h \
-    src/modbus/modbusdefs.h \
-    src/modbus/modbuscodec.h \
-    src/modbus/transport.h \
-    src/modbus/serialtransport.h \
-    src/modbus/networktransport.h \
-    src/modbus/modbusclient.h \
-    src/modbus/modbusworker.h
+    src/modbusdefs.h \
+    src/modbuscodec.h \
+    src/transport.h \
+    src/tcptransport.h \
+    src/udptransport.h \
+    src/modbusclient.h \
+    src/modbusworker.h \
+    src/modbustransport.h \
+    src/serialtransport.h
 
 # Windows EXE resource
 RC_FILE = res/app.rc
@@ -42,7 +45,3 @@ RC_FILE = res/app.rc
 QMAKE_CFLAGS += -std=c11        # C 语言标准
 QMAKE_CXXFLAGS += -std=c++11    # C++ 语言标准
 QMAKE_CXXFLAGS_WARN_ON = -Wall
-
-# 源文件已统一保存为 UTF-8，告知编译器按 UTF-8 读取，避免中文字面量乱码
-QMAKE_CFLAGS += -finput-charset=utf-8
-QMAKE_CXXFLAGS += -finput-charset=utf-8

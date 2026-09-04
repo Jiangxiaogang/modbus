@@ -9,7 +9,8 @@ class QTabWidget;
 class QTableWidget;
 class QTableWidgetItem;
 
-struct RowData {
+struct RowData
+{
     QString  name;
     int      plcAddr;     // PLC 地址 (如 40001)
     int      protoAddr;   // 协议地址 (0基)
@@ -23,22 +24,22 @@ class RegisterView : public QWidget
 {
     Q_OBJECT
 public:
-    explicit RegisterView(QWidget* parent = 0);
+    explicit RegisterView(QWidget *parent = 0);
 
 signals:
     // 某区读取计划变化（增删/改类型）
-    void planChanged(int areaIndex, const QList<RegPlanItem>& items);
+    void planChanged(int areaIndex, const QList<RegPlanItem> &items);
     // 请求写入某点
     void writeRequested(int areaIndex, int protoAddr, DataType type, qint64 value);
 
 public slots:
     void onReadResult(int areaIndex, int protoAddr, bool valid, qint64 value);
-    void onWriteResult(int areaIndex, int protoAddr, bool ok, const QString& msg);
+    void onWriteResult(int areaIndex, int protoAddr, bool ok, const QString &msg);
 
 private slots:
-    void onCustomContextMenu(const QPoint& pos);
+    void onCustomContextMenu(const QPoint &pos);
     void onTypeChanged(int index);
-    void onNameChanged(QTableWidgetItem* item);
+    void onNameChanged(QTableWidgetItem *item);
     void onWriteClicked();
     void onTabChanged(int index);
 
@@ -46,17 +47,18 @@ private:
     void setupTab(int areaIndex);
     void addRegisters(int areaIndex, int startPlc, int count);
     void rebuildPlan(int areaIndex);
-    int  areaOf(QTableWidget* table) const;
-    int  findRow(QTableWidget* table, int protoAddr) const;
+    int  areaOf(QTableWidget *table) const;
+    int  findRow(QTableWidget *table, int protoAddr) const;
     void onQuickAddInArea(int area);
-    void onDeleteRowsInArea(int area, QTableWidget* t);
+    void onDeleteRowsInArea(int area, QTableWidget *t);
 
     // 序号由垂直表头（Qt 自带行号）提供，故不再单独建列
-    enum Col { ColName=0, ColAddr, ColStatus, ColType,
-               ColRaw, ColSet, ColWrite };
+    enum Col { ColName = 0, ColAddr, ColStatus, ColType,
+               ColRaw, ColSet, ColWrite
+             };
 
-    QTabWidget*        m_tabs;
-    QTableWidget*      m_tables[4];
+    QTabWidget        *m_tabs;
+    QTableWidget      *m_tables[4];
     QList<RowData>     m_rows[4];
 };
 

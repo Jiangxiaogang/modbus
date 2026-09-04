@@ -8,7 +8,7 @@
 #endif
 #include <windows.h>
 
-SerialTransport::SerialTransport(const QString& portName, int baudRate,
+SerialTransport::SerialTransport(const QString &portName, int baudRate,
                                  int dataBits, int stopBits, char parity)
     : m_portName(portName), m_baudRate(baudRate), m_dataBits(dataBits)
     , m_stopBits(stopBits), m_parity(parity), m_handle(INVALID_HANDLE_VALUE)
@@ -28,7 +28,8 @@ bool SerialTransport::open()
     HANDLE h = CreateFileA(name.toLocal8Bit().constData(),
                            GENERIC_READ | GENERIC_WRITE,
                            0, NULL, OPEN_EXISTING, 0, NULL);
-    if (h == INVALID_HANDLE_VALUE) {
+    if (h == INVALID_HANDLE_VALUE)
+    {
         m_err = QString("打开串口失败 (0x%1)").arg((int)GetLastError(), 0, 16);
         return false;
     }
@@ -39,23 +40,47 @@ bool SerialTransport::open()
     dcb.DCBlength = sizeof(dcb);
     dcb.BaudRate = m_baudRate;
     dcb.ByteSize = (BYTE)m_dataBits;
-    switch (m_stopBits) {
-    case 20: dcb.StopBits = TWOSTOPBITS;  break;
-    case 15: dcb.StopBits = ONE5STOPBITS; break;
-    default: dcb.StopBits = ONESTOPBIT;   break;
+    switch (m_stopBits)
+    {
+    case 20:
+        dcb.StopBits = TWOSTOPBITS;
+        break;
+    case 15:
+        dcb.StopBits = ONE5STOPBITS;
+        break;
+    default:
+        dcb.StopBits = ONESTOPBIT;
+        break;
     }
-    switch (m_parity) {
-    case 'E': dcb.Parity = EVENPARITY; dcb.fParity = TRUE; break;
-    case 'O': dcb.Parity = ODDPARITY;  dcb.fParity = TRUE; break;
-    case 'M': dcb.Parity = MARKPARITY; dcb.fParity = TRUE; break;
-    case 'S': dcb.Parity = SPACEPARITY; dcb.fParity = TRUE; break;
-    default:  dcb.Parity = NOPARITY;   dcb.fParity = FALSE; break;
+    switch (m_parity)
+    {
+    case 'E':
+        dcb.Parity = EVENPARITY;
+        dcb.fParity = TRUE;
+        break;
+    case 'O':
+        dcb.Parity = ODDPARITY;
+        dcb.fParity = TRUE;
+        break;
+    case 'M':
+        dcb.Parity = MARKPARITY;
+        dcb.fParity = TRUE;
+        break;
+    case 'S':
+        dcb.Parity = SPACEPARITY;
+        dcb.fParity = TRUE;
+        break;
+    default:
+        dcb.Parity = NOPARITY;
+        dcb.fParity = FALSE;
+        break;
     }
     dcb.fBinary        = TRUE;
     dcb.fAbortOnError  = FALSE;
     dcb.fDtrControl    = DTR_CONTROL_ENABLE;
     dcb.fRtsControl    = RTS_CONTROL_ENABLE;
-    if (!SetCommState(h, &dcb)) {
+    if (!SetCommState(h, &dcb))
+    {
         m_err = "配置串口参数失败";
         close();
         return false;
@@ -83,7 +108,8 @@ bool SerialTransport::open()
 
 void SerialTransport::close()
 {
-    if (m_handle != INVALID_HANDLE_VALUE) {
+    if (m_handle != INVALID_HANDLE_VALUE)
+    {
         PurgeComm((HANDLE)m_handle, PURGE_RXCLEAR | PURGE_TXCLEAR);
         CloseHandle((HANDLE)m_handle);
         m_handle = INVALID_HANDLE_VALUE;
@@ -95,12 +121,13 @@ bool SerialTransport::isOpen() const
     return m_handle != INVALID_HANDLE_VALUE;
 }
 
-qint64 SerialTransport::write(const char* data, qint64 len)
+qint64 SerialTransport::write(const char *data, qint64 len)
 {
     if (!isOpen()) return -1;
     PurgeComm((HANDLE)m_handle, PURGE_RXCLEAR); // 清掉旧数据
     DWORD written = 0;
-    if (!WriteFile((HANDLE)m_handle, data, (DWORD)len, &written, NULL)) {
+    if (!WriteFile((HANDLE)m_handle, data, (DWORD)len, &written, NULL))
+    {
         m_err = "串口写入失败";
         return -1;
     }
@@ -111,7 +138,7 @@ qint64 SerialTransport::write(const char* data, qint64 len)
     return (qint64)written;
 }
 
-QByteArray SerialTransport::readFrame(int timeoutMs)
+QByteArray SerialTransport::read(int timeoutMs)
 {
     QByteArray buf;
     if (!isOpen())
@@ -130,14 +157,17 @@ QByteArray SerialTransport::readFrame(int timeoutMs)
     SetCommTimeouts(h, &ct);
 
     DWORD start = GetTickCount();
-    while ((int)(GetTickCount() - start) < timeoutMs + 50) {
+    while ((int)(GetTickCount() - start) < timeoutMs + 50)
+    {
         char tmp[256];
         DWORD got = 0;
-        if (!ReadFile(h, tmp, sizeof(tmp), &got, NULL)) {
+        if (!ReadFile(h, tmp, sizeof(tmp), &got, NULL))
+        {
             m_err = "串口读取失败";
             break;
         }
-        if (got == 0) {
+        if (got == 0)
+        {
             // 发生间隔超时，说明一帧已结束
             if (!buf.isEmpty())
                 break;

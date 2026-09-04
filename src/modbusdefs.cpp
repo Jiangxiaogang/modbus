@@ -1,11 +1,13 @@
 #include "modbusdefs.h"
 
-quint16 modbusCrc(const char* data, int len)
+quint16 modbusCrc(const char *data, int len)
 {
     quint16 crc = 0xFFFF;
-    for (int i = 0; i < len; ++i) {
+    for (int i = 0; i < len; ++i)
+    {
         crc ^= (quint8)data[i];
-        for (int b = 0; b < 8; ++b) {
+        for (int b = 0; b < 8; ++b)
+        {
             if (crc & 0x0001)
                 crc = (crc >> 1) ^ 0xA001;
             else
@@ -15,7 +17,7 @@ quint16 modbusCrc(const char* data, int len)
     return crc;
 }
 
-quint8 modbusLrc(const char* data, int len)
+quint8 modbusLrc(const char *data, int len)
 {
     int sum = 0;
     for (int i = 0; i < len; ++i)
