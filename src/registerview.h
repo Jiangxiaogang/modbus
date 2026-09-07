@@ -53,8 +53,9 @@ private:
     void onDeleteRowsInArea(int area, QTableWidget *t);
 
     // 序号由垂直表头（Qt 自带行号）提供，故不再单独建列
-    enum Col { ColName = 0, ColAddr, ColStatus, ColType,
-               ColRaw, ColSet, ColWrite
+    // 列序须与 setupTab 中表头顺序一致
+    enum Col { ColName = 0, ColAddr, ColType, ColRaw,
+               ColSet, ColWrite, ColStatus
              };
 
     QTabWidget        *m_tabs;

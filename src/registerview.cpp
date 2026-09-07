@@ -6,11 +6,11 @@
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QComboBox>
-#include <QLineEdit>
 #include <QPushButton>
 #include <QMenu>
 #include <QHeaderView>
 #include <QVBoxLayout>
+#include <QDebug>
 
 RegisterView::RegisterView(QWidget *parent)
     : QWidget(parent)
@@ -35,13 +35,12 @@ void RegisterView::setupTab(int areaIndex)
     t->setSelectionBehavior(QAbstractItemView::SelectRows);
     t->setSelectionMode(QAbstractItemView::ExtendedSelection);
     t->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed);
-
     t->verticalHeader()->setVisible(true);
 
     QStringList headers;
     headers << "寄存器名称" << "寄存器地址" << "数据类型" << "原始值" << "设定值" << "写入" <<  "状态";
     t->setHorizontalHeaderLabels(headers);
-    t->horizontalHeader()->setStretchLastSection(false);
+    t->horizontalHeader()->setStretchLastSection(true);
     t->setColumnWidth(ColName, 120);
     t->setColumnWidth(ColAddr, 80);
     t->setColumnWidth(ColStatus, 80);
@@ -54,7 +53,7 @@ void RegisterView::setupTab(int areaIndex)
     int hdrH = t->horizontalHeader()->height();
     if (hdrH > 0)
     {
-         t->verticalHeader()->setDefaultSectionSize(hdrH);
+        t->verticalHeader()->setDefaultSectionSize(hdrH + 2);
     }
 
     connect(t, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(onCustomContextMenu(QPoint)));
@@ -90,7 +89,6 @@ void RegisterView::addRegisters(int areaIndex, int startAddr, int count)
         int plc = proto + base;
 
         RowData rd;
-        // 0区(遥控) PLC 地址为 00001-09999，名称补前导 0 至 5 位保持对齐
         rd.name = (areaIndex == 0)
                   ? QString::number(plc).rightJustified(5, '0')
                   : QString::number(plc);
@@ -111,32 +109,44 @@ void RegisterView::addRegisters(int areaIndex, int startAddr, int count)
         t->setItem(r, ColStatus, new QTableWidgetItem("无效"));
         t->item(r, ColStatus)->setTextColor(Qt::red);
         t->setItem(r, ColRaw, new QTableWidgetItem(""));
+        t->setItem(r, ColSet, new QTableWidgetItem(""));
 
-        QComboBox *typeCombo = new QComboBox(t);
-        typeCombo->addItems(QStringList() << "BIT" << "U16" << "S16");
-        typeCombo->setCurrentIndex((int)def);
-        typeCombo->setProperty("row", r);
-        typeCombo->setStyleSheet("border: none;");
-        t->setCellWidget(r, ColType, typeCombo);
-        connect(typeCombo, SIGNAL(currentIndexChanged(int)),
-                this, SLOT(onTypeChanged(int)));
-
-        QLineEdit *setEdit = new QLineEdit(t);
-        setEdit->setProperty("row", r);
-        // 去掉边框与背景，使设定值输入框融入表格样式
-        setEdit->setStyleSheet("border: none;");
-        t->setCellWidget(r, ColSet, setEdit);
+        if (areaIndex == 0 || areaIndex == 1)
+        {
+            // 0区/1区为位类型，固定 BIT，不提供下拉
+            QTableWidgetItem *typeItem = new QTableWidgetItem("bit");
+            typeItem->setFlags(typeItem->flags() & ~Qt::ItemIsEditable);
+            typeItem->setTextAlignment(Qt::AlignCenter);
+            t->setItem(r, ColType, typeItem);
+        }
+        else
+        {
+            // 3区/4区支持 uint16 / int16 选择
+            QComboBox *typeCombo = new QComboBox(t);
+            typeCombo->addItems(QStringList() << "uint16" << "int16");
+            typeCombo->setCurrentIndex(def == TypeS16 ? 1 : 0);
+            typeCombo->setProperty("row", r);
+            // 去掉组合框与下拉箭头按钮的 3D 边框，融入表格
+            typeCombo->setStyleSheet(
+                "QComboBox { border: none; background: transparent; }"
+                "QComboBox::drop-down { border: none; background: transparent; }"
+            );
+            t->setCellWidget(r, ColType, typeCombo);
+            connect(typeCombo, SIGNAL(currentIndexChanged(int)),
+                    this, SLOT(onTypeChanged(int)));
+        }
 
         QPushButton *wbtn = new QPushButton("写入", t);
         wbtn->setProperty("row", r);
-       // wbtn->setStyleSheet("border: none;");//"border: none; background: transparent;");
+        wbtn->setFlat(true);
         t->setCellWidget(r, ColWrite, wbtn);
         connect(wbtn, SIGNAL(clicked()), this, SLOT(onWriteClicked()));
 
-        // 不可写区域：仍显示设定值与写入按钮，但置为禁用状态
+        // 不可写区域：设定值不可编辑，写入按钮禁用
         if (!info.writable)
         {
-            setEdit->setEnabled(false);
+            QTableWidgetItem *set = t->item(r, ColSet);
+            if (set) set->setFlags(set->flags() & ~Qt::ItemIsEditable);
             wbtn->setEnabled(false);
         }
     }
@@ -166,7 +176,10 @@ void RegisterView::onTypeChanged(int /*index*/)
     int area = areaOf(t);
     int row = combo->property("row").toInt();
     if (area < 0 || row < 0 || row >= m_rows[area].size()) return;
-    m_rows[area][row].type = (DataType)combo->currentIndex();
+
+    QString txt = combo->currentText();
+    DataType tp = (txt == "int16") ? TypeS16 : TypeU16;
+    m_rows[area][row].type = tp;
     rebuildPlan(area);
 }
 
@@ -191,10 +204,10 @@ void RegisterView::onWriteClicked()
     if (area < 0 || row < 0 || row >= m_rows[area].size()) return;
 
     RowData &rd = m_rows[area][row];
-    QLineEdit *setEdit = qobject_cast<QLineEdit *>(t->cellWidget(row, ColSet));
-    if (!setEdit) return;
+    QTableWidgetItem *setItem = t->item(row, ColSet);
+    if (!setItem) return;
     bool ok = false;
-    qint64 val = setEdit->text().toLongLong(&ok);
+    qint64 val = setItem->text().toLongLong(&ok);
     if (!ok)
     {
         btn->setText("错误");
@@ -295,8 +308,6 @@ void RegisterView::onDeleteRowsInArea(int area, QTableWidget *t)
     {
         QComboBox *c = qobject_cast<QComboBox *>(t->cellWidget(r, ColType));
         if (c) c->setProperty("row", r);
-        QLineEdit *e = qobject_cast<QLineEdit *>(t->cellWidget(r, ColSet));
-        if (e) e->setProperty("row", r);
         QPushButton *b = qobject_cast<QPushButton *>(t->cellWidget(r, ColWrite));
         if (b) b->setProperty("row", r);
     }

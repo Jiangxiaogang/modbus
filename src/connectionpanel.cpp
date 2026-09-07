@@ -18,7 +18,7 @@ ConnectionPanel::ConnectionPanel(QWidget *parent)
 {
     QVBoxLayout *root = new QVBoxLayout(this);
     root->setMargin(0);
-    setContentsMargins(10,10,0,0);
+    setContentsMargins(4,4,0,0);
     // ---------- 通道配置 ----------
     QGroupBox *connGrp = new QGroupBox("通道配置", this);
     QFormLayout *connLayout = new QFormLayout(connGrp);
