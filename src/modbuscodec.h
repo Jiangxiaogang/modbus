@@ -29,6 +29,9 @@ public:
         return (respFunc & 0x7F) == (reqFunc & 0x7F) && (respFunc & 0x80);
     }
 
+    // 二进制转大写十六进制字符串（通信日志显示用）
+    static QByteArray toHex(const QByteArray &bytes);
+
     static QString exceptionText(quint8 code);
 };
 

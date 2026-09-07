@@ -5,6 +5,7 @@
 
 class ConnectionPanel;
 class RegisterView;
+class CommLogView;
 class ModbusWorker;
 class RealtimeData;
 class QThread;
@@ -27,6 +28,7 @@ private slots:
 private:
     ConnectionPanel *m_panel;
     RegisterView    *m_view;
+    CommLogView     *m_log;   // 底部通信日志
     ModbusWorker    *m_worker;
     RealtimeData    *m_data;   // 实时数据中转站
     QThread         *m_thread;

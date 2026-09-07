@@ -33,8 +33,17 @@ signals:
                     qint64 value, const QString &errText, qint64 errValue);
     void writeResult(int areaIndex, int address, bool ok, const QString &msg);
 
+    // 通信日志：ts 为毫秒时间戳(hh:mm:ss.zzz)，isWrite 区分读/写操作
+    void logTx(bool isWrite, const QString &ts, const QString &hex);
+    void logRx(bool isWrite, const QString &ts, const QString &hex);
+    void logError(const QString &ts, const QString &msg);
+    void logInfo(const QString &ts, const QString &msg);
+
 private slots:
     void doPoll();
+    // 转发 client 帧级收发信号，附加读/写标签与时间戳后发出
+    void onFrameSent(const QByteArray &frame);
+    void onFrameReceived(const QByteArray &frame);
 
 private:
     void runReadArea(int areaIndex, const QList<RegPlanItem> &items);
@@ -45,6 +54,7 @@ private:
     QTimer                *m_timer;
     quint32                m_tx, m_rx, m_errCount;
     QMutex                 m_mutex;
+    bool                   m_logIsWrite; // 当前事务是否为写操作（日志标签用）
 };
 
 #endif // MODBUSWORKER_H

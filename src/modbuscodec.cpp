@@ -36,6 +36,11 @@ static bool fromHexBytes(const QByteArray &hex, QByteArray &out)
     return true;
 }
 
+QByteArray ModbusCodec::toHex(const QByteArray &bytes)
+{
+    return toHexBytes(bytes.constData(), bytes.size());
+}
+
 QByteArray ModbusCodec::encode(ProtocolType proto, quint8 slave,
                                quint8 func, const QByteArray &pdu)
 {

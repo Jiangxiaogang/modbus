@@ -26,6 +26,11 @@ public:
                   qint64 *txBytes = 0, qint64 *rxBytes = 0,
                   quint8 *modbusErr = 0);
 
+signals:
+    // 完整传输帧（含从站/校验/MBAP）收发通知，供通信日志使用
+    void frameSent(const QByteArray &frame);
+    void frameReceived(const QByteArray &frame);
+
 private:
     ITransport *buildTransport(const ModbusConfig &cfg);
 

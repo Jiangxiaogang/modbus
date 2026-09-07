@@ -13,6 +13,7 @@ SOURCES += \
     src/mainwindow.cpp \
     src/connectionpanel.cpp \
     src/registerview.cpp \
+    src/commlogview.cpp \
     src/addregisterdialog.cpp \
     src/modbusdefs.cpp \
     src/modbuscodec.cpp \
@@ -29,6 +30,7 @@ HEADERS += \
     src/mainwindow.h \
     src/connectionpanel.h \
     src/registerview.h \
+    src/commlogview.h \
     src/addregisterdialog.h \
     src/modbusdefs.h \
     src/modbuscodec.h \

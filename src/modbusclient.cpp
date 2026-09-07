@@ -83,6 +83,7 @@ bool ModbusClient::transact(quint8 func, const QByteArray &txPdu,
         return false;
     }
     if (txBytes) *txBytes = w;
+    emit frameSent(frame);
 
     QByteArray rx = m_transport->read(m_cfg.responseTimeout);
     if (rx.isEmpty())
@@ -91,6 +92,7 @@ bool ModbusClient::transact(quint8 func, const QByteArray &txPdu,
         return false;
     }
     if (rxBytes) *rxBytes = rx.size();
+    emit frameReceived(rx);
 
     quint8 slave = 0, rfunc = 0;
     QByteArray rPdu;

@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include "connectionpanel.h"
 #include "registerview.h"
+#include "commlogview.h"
 #include "modbusworker.h"
 #include "realtimedata.h"
 #include "modbusdefs.h"
@@ -9,6 +10,7 @@
 #include <QStatusBar>
 #include <QLabel>
 #include <QThread>
+#include <QList>
 #include <QMessageBox>
 #include <QStyleFactory>
 
@@ -16,8 +18,8 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
     setWindowTitle("ModbusTool");
-    setMinimumSize(900, 450);
-    resize(900, 450);
+    setMinimumSize(900, 500);
+    resize(900, 560);
 
     // 左侧连接区 / 右侧数据区
     QSplitter *split = new QSplitter(Qt::Horizontal, this);
@@ -25,7 +27,16 @@ MainWindow::MainWindow(QWidget *parent)
     m_view  = new RegisterView(split);
     split->setStretchFactor(0, 0);
     split->setStretchFactor(1, 1);
-    setCentralWidget(split);
+
+    // 底部通信日志：纵向分割，拖动分割条可调整日志区高度
+    m_log = new CommLogView(this);
+    QSplitter *vsplit = new QSplitter(Qt::Vertical, this);
+    vsplit->addWidget(split);
+    vsplit->addWidget(m_log);
+    vsplit->setStretchFactor(0, 1);
+    vsplit->setStretchFactor(1, 0);
+    vsplit->setSizes(QList<int>() << 320 << 130);
+    setCentralWidget(vsplit);
 
     // 状态栏
     m_lblConn = new QLabel("未连接", this);
@@ -56,6 +67,12 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_worker, SIGNAL(connectionStateChanged(bool)), this, SLOT(onConnectionState(bool)));
     connect(m_worker, SIGNAL(connectError(QString)), this, SLOT(onConnectError(QString)));
     connect(m_worker, SIGNAL(statsUpdated(quint32, quint32, quint32)), this, SLOT(onStats(quint32, quint32, quint32)));
+
+    // 工作线程 -> 通信日志（排队连接）
+    connect(m_worker, SIGNAL(logTx(bool, QString, QString)), m_log, SLOT(appendTx(bool, QString, QString)));
+    connect(m_worker, SIGNAL(logRx(bool, QString, QString)), m_log, SLOT(appendRx(bool, QString, QString)));
+    connect(m_worker, SIGNAL(logError(QString, QString)), m_log, SLOT(appendError(QString, QString)));
+    connect(m_worker, SIGNAL(logInfo(QString, QString)), m_log, SLOT(appendInfo(QString, QString)));
 
     // 采集 -> 中转站 -> 展示：读到数据先经 API 写入 RealtimeData，再转发给视图显示
     connect(m_worker, SIGNAL(readResult(int, int, int, qint64, QString, qint64)),
