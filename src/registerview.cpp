@@ -10,6 +10,7 @@
 #include <QMenu>
 #include <QHeaderView>
 #include <QVBoxLayout>
+#include <QMessageBox>
 #include <QDebug>
 
 RegisterView::RegisterView(QWidget *parent)
@@ -73,19 +74,26 @@ int RegisterView::areaOf(QTableWidget *table) const
     return -1;
 }
 
-void RegisterView::addRegisters(int areaIndex, int startAddr, int count)
+int RegisterView::addRegisters(int areaIndex, int startAddr, int count)
 {
     QTableWidget *t = m_tables[areaIndex];
     const AreaInfo &info = areaInfo(areaIndex);
     DataType def = (info.readFunc == 1 || info.readFunc == 2) ? TypeBIT : TypeU16;
 
     int base = info.plcBase;
+    int skipped = 0;
     t->setSortingEnabled(false);
     for (int i = 0; i < count; ++i)
     {
         int proto = startAddr + i;
         if (proto < 0 || proto > 65535)
             continue;
+        // 快速添加时跳过本区已存在的地址，避免重复点位
+        if (findRow(t, proto) >= 0)
+        {
+            ++skipped;
+            continue;
+        }
         int plc = proto + base;
 
         RowData rd;
@@ -123,6 +131,7 @@ void RegisterView::addRegisters(int areaIndex, int startAddr, int count)
             QComboBox *typeCombo = new QComboBox(t);
             typeCombo->addItems(QStringList() << "uint16" << "int16");
             typeCombo->setCurrentIndex(def == TypeS16 ? 1 : 0);
+            typeCombo->setProperty("area", areaIndex);
             typeCombo->setProperty("row", r);
             // 去掉组合框与下拉箭头按钮的 3D 边框，融入表格
             typeCombo->setStyleSheet(
@@ -135,6 +144,7 @@ void RegisterView::addRegisters(int areaIndex, int startAddr, int count)
         }
 
         QPushButton *wbtn = new QPushButton("写入", t);
+        wbtn->setProperty("area", areaIndex);
         wbtn->setProperty("row", r);
         wbtn->setFlat(true);
         t->setCellWidget(r, ColWrite, wbtn);
@@ -150,6 +160,7 @@ void RegisterView::addRegisters(int areaIndex, int startAddr, int count)
     }
     t->setSortingEnabled(false);
     rebuildPlan(areaIndex);
+    return skipped;
 }
 
 void RegisterView::rebuildPlan(int areaIndex)
@@ -169,11 +180,11 @@ void RegisterView::onTypeChanged(int /*index*/)
 {
     QComboBox *combo = qobject_cast<QComboBox *>(sender());
     if (!combo) return;
-    QTableWidget *t = qobject_cast<QTableWidget *>(combo->parent());
-    if (!t) return;
-    int area = areaOf(t);
+    // 注意: setCellWidget 会把控件重设父对象为 viewport，
+    // 不能靠 parent() 反查表格，改用创建时写入的动态属性
+    int area = combo->property("area").toInt();
     int row = combo->property("row").toInt();
-    if (area < 0 || row < 0 || row >= m_rows[area].size()) return;
+    if (area < 0 || area > 3 || row < 0 || row >= m_rows[area].size()) return;
 
     QString txt = combo->currentText();
     DataType tp = (txt == "int16") ? TypeS16 : TypeU16;
@@ -195,11 +206,12 @@ void RegisterView::onWriteClicked()
 {
     QPushButton *btn = qobject_cast<QPushButton *>(sender());
     if (!btn) return;
-    QTableWidget *t = qobject_cast<QTableWidget *>(btn->parent());
-    if (!t) return;
-    int area = areaOf(t);
+    // 注意: setCellWidget 会把控件重设父对象为 viewport，
+    // 不能靠 parent() 反查表格，改用创建时写入的动态属性
+    int area = btn->property("area").toInt();
     int row = btn->property("row").toInt();
-    if (area < 0 || row < 0 || row >= m_rows[area].size()) return;
+    if (area < 0 || area > 3 || row < 0 || row >= m_rows[area].size()) return;
+    QTableWidget *t = m_tables[area];
 
     RowData &rd = m_rows[area][row];
     QTableWidgetItem *setItem = t->item(row, ColSet);
@@ -244,14 +256,13 @@ void RegisterView::onReadResult(const ReadPoint &pt)
         break;
 
     case ReadError:
-        st->setText("错误");
+        // Modbus 异常码与错误描述显示在状态列，原始值列无有效数据
+        st->setText(QString("错误 0x%1 %2")
+                    .arg((quint8)pt.errValue, 2, 16, QLatin1Char('0'))
+                    .arg(pt.errText));
         st->setTextColor(Qt::red);
-        // 展示 Modbus 错误值(异常码) 与错误字符串
-        raw->setText(QString("0x%1 %2")
-                     .arg((quint8)pt.errValue, 2, 16, QLatin1Char('0'))
-                     .arg(pt.errText));
         st->setToolTip(pt.errText);
-        raw->setToolTip(pt.errText);
+        raw->setText("—");
         break;
 
     default: // ReadInvalid
@@ -296,19 +307,31 @@ void RegisterView::onCustomContextMenu(const QPoint &pos)
     QMenu menu(this);
     QAction *addAct = menu.addAction("快速添加...");
     QAction *delAct = menu.addAction("删除点位");
+    menu.addSeparator();
+    QAction *clearAct = menu.addAction("清空列表");
+    clearAct->setEnabled(t->rowCount() > 0);
     QAction *chosen = menu.exec(gpos);
     if (!chosen) return;
     if (chosen == addAct)
         onQuickAddInArea(area);
     else if (chosen == delAct)
         onDeleteRowsInArea(area, t);
+    else if (chosen == clearAct)
+        onClearArea(area, t);
 }
 
 void RegisterView::onQuickAddInArea(int area)
 {
     AddRegisterDialog dlg(area, this);
     if (dlg.exec() == QDialog::Accepted)
-        addRegisters(area, dlg.startAddr(), dlg.count());
+    {
+        int skipped = addRegisters(area, dlg.startAddr(), dlg.count());
+        if (skipped > 0)
+        {
+            QMessageBox::information(this, "快速添加",
+                QString("已跳过 %1 个与现有点位重复的地址。").arg(skipped));
+        }
+    }
 }
 
 void RegisterView::onDeleteRowsInArea(int area, QTableWidget *t)
@@ -333,4 +356,20 @@ void RegisterView::onDeleteRowsInArea(int area, QTableWidget *t)
         if (b) b->setProperty("row", r);
     }
     rebuildPlan(area);
+}
+
+void RegisterView::onClearArea(int area, QTableWidget *t)
+{
+    if (area < 0 || !t || t->rowCount() == 0)
+        return;
+    // 清空不可恢复，先确认
+    if (QMessageBox::question(this, "清空列表",
+                              QString("确定清空 %1 的全部点位吗？").arg(areaInfo(area).name),
+                              QMessageBox::Yes | QMessageBox::No,
+                              QMessageBox::No) != QMessageBox::Yes)
+        return;
+
+    t->setRowCount(0);           // 移除全部行及行内控件
+    m_rows[area].clear();
+    rebuildPlan(area);           // 同步空读取计划给工作线程，停止轮询该区
 }

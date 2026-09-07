@@ -5,6 +5,7 @@
 #include <QTimer>
 #include <QTime>
 #include <QMap>
+#include <QSet>
 
 ModbusWorker::ModbusWorker(QObject *parent)
     : QObject(parent)
@@ -127,9 +128,23 @@ void ModbusWorker::runReadArea(int areaIndex, const QList<RegPlanItem> &items)
         if (it.address > maxA) maxA = it.address;
     }
 
+    // 单点模式只轮询计划内的地址：逐个请求时空白地址必然失败，
+    // 若按区间全扫会把计划外的失败错误地标到整个区上
+    QSet<int> planned;
+    if (q == 1)
+    {
+        foreach (const RegPlanItem &it, items)
+            planned.insert(it.address);
+    }
+
     int start = minA;
     while (start <= maxA)
     {
+        if (q == 1 && !planned.contains(start))
+        {
+            ++start;
+            continue;
+        }
         int cnt = qMin(q, maxA - start + 1);
         QByteArray tx;
         tx.append((char)((start >> 8) & 0xFF));
@@ -148,7 +163,8 @@ void ModbusWorker::runReadArea(int areaIndex, const QList<RegPlanItem> &items)
 
         if (!ok)
         {
-            // 区分超时 / 设备异常 / 其它无效，给整个区统一标记
+            // 区分超时 / 设备异常 / 其它无效；只标记本次分片覆盖的地址，
+            // 并继续处理其余分片，避免连累通信正常的寄存器
             int status;
             qint64 errValue = 0;
             QString errText;
@@ -169,9 +185,15 @@ void ModbusWorker::runReadArea(int areaIndex, const QList<RegPlanItem> &items)
                 errText = err;
             }
             emit logError(QTime::currentTime().toString("hh:mm:ss.zzz"), errText);
+            const int chunkEnd = start + cnt;
             foreach (const RegPlanItem &it, items)
+            {
+                if (it.address < start || it.address >= chunkEnd)
+                    continue;  // 其它分片各自独立处理
                 emit readResult(areaIndex, it.address, status, 0, errText, errValue);
-            return;
+            }
+            start += cnt;
+            continue;
         }
 
         // 解析响应，建立地址->值 映射

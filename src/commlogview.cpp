@@ -3,6 +3,7 @@
 #include <QVBoxLayout>
 #include <QPlainTextEdit>
 #include <QTextCursor>
+#include <QTextBlock>
 #include <QMenu>
 
 // 收/发 × 读/写 组合颜色
@@ -74,9 +75,17 @@ void CommLogView::appendLine(const QString &tag, const QString &color,
     // 整行使用类别颜色：[hh:mm:ss.zzz] [发·读] 01 03 00 00 ...
     QString html = QString("<span style=\"color:%1\">[%2] [%3] %4</span>")
                    .arg(color).arg(ts).arg(tag).arg(text);
-    m_edit->appendHtml(html);
-    // 追加后自动滚动到底部
+
+    // 用户选中了部分文字(正在查看)时不抢滚动，追加后保持视图不动；
+    // 否则跟随日志尾部自动滚到底
+    bool followTail = !m_edit->textCursor().hasSelection();
     QTextCursor c = m_edit->textCursor();
     c.movePosition(QTextCursor::End);
-    m_edit->setTextCursor(c);
+    // insertHtml 是行内插入，须先开新段落，保证每个日志条目独占一行
+    // (空文档时当前块为空，直接写入，避免顶部出现空行)
+    if (!c.block().text().isEmpty())
+        c.insertBlock();
+    c.insertHtml(html);
+    if (followTail)
+        m_edit->setTextCursor(c);  // 光标已在末尾 → 视图自动滚到底部
 }

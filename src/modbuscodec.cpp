@@ -38,7 +38,19 @@ static bool fromHexBytes(const QByteArray &hex, QByteArray &out)
 
 QByteArray ModbusCodec::toHex(const QByteArray &bytes)
 {
-    return toHexBytes(bytes.constData(), bytes.size());
+    // 字节间加空格便于阅读，如 "01 03 00 00 0A C5 CD"
+    QByteArray raw = toHexBytes(bytes.constData(), bytes.size());
+    if (raw.size() < 4) // 0/1 个字节无需分隔
+        return raw;
+    QByteArray out;
+    out.reserve(raw.size() * 3 / 2);
+    for (int i = 0; i < raw.size(); i += 2)
+    {
+        if (i) out.append(' ');
+        out.append(raw.at(i));
+        out.append(raw.at(i + 1));
+    }
+    return out;
 }
 
 QByteArray ModbusCodec::encode(ProtocolType proto, quint8 slave,

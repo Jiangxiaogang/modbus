@@ -45,12 +45,13 @@ private slots:
 
 private:
     void setupTab(int areaIndex);
-    void addRegisters(int areaIndex, int startAddr, int count);
+    int  addRegisters(int areaIndex, int startAddr, int count); // 返回因重复而跳过的数量
     void rebuildPlan(int areaIndex);
     int  areaOf(QTableWidget *table) const;
     int  findRow(QTableWidget *table, int protoAddr) const;
     void onQuickAddInArea(int area);
     void onDeleteRowsInArea(int area, QTableWidget *t);
+    void onClearArea(int area, QTableWidget *t);
 
     // 序号由垂直表头（Qt 自带行号）提供，故不再单独建列
     // 列序须与 setupTab 中表头顺序一致
