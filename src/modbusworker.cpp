@@ -5,7 +5,7 @@
 #include <QTimer>
 #include <QTime>
 #include <QMap>
-#include <QSet>
+#include <QtAlgorithms>
 
 ModbusWorker::ModbusWorker(QObject *parent)
     : QObject(parent)
@@ -118,138 +118,138 @@ void ModbusWorker::runReadArea(int areaIndex, const QList<RegPlanItem> &items)
     m_logIsWrite = false; // 读事务，供日志标签区分
     const AreaInfo &info = areaInfo(areaIndex);
     int maxQ = (info.readFunc == 1 || info.readFunc == 2) ? 2000 : 125;
-    int q = m_cfg.readMode ? maxQ : 1;
 
-    int minA = items.first().address;
-    int maxA = items.first().address;
+    // 计划内地址升序排列，供连续段合并使用
+    QList<int> addrs;
     foreach (const RegPlanItem &it, items)
+        addrs.append(it.address);
+    qSort(addrs);
+
+    if (m_cfg.readMode)
     {
-        if (it.address < minA) minA = it.address;
-        if (it.address > maxA) maxA = it.address;
+        // 批量模式：按计划读取，计划内连续地址合并为一次读取，
+        // 非连续地址单独读取；连续段超过单次读取上限时分片
+        int i = 0;
+        while (i < addrs.size())
+        {
+            int runStart = addrs[i];
+            int runEnd   = runStart;
+            while (i + 1 < addrs.size() && addrs[i + 1] == addrs[i] + 1)
+                runEnd = addrs[++i];
+            ++i;
+            for (int s = runStart; s <= runEnd; s += maxQ)
+                readChunk(areaIndex, s, qMin(maxQ, runEnd - s + 1), items);
+        }
     }
-
-    // 单点模式只轮询计划内的地址：逐个请求时空白地址必然失败，
-    // 若按区间全扫会把计划外的失败错误地标到整个区上
-    QSet<int> planned;
-    if (q == 1)
+    else
     {
-        foreach (const RegPlanItem &it, items)
-            planned.insert(it.address);
+        // 单点模式：计划内地址逐个读取
+        foreach (int addr, addrs)
+            readChunk(areaIndex, addr, 1, items);
     }
+}
 
-    int start = minA;
-    while (start <= maxA)
+void ModbusWorker::readChunk(int areaIndex, int start, int cnt,
+                             const QList<RegPlanItem> &items)
+{
+    const AreaInfo &info = areaInfo(areaIndex);
+
+    QByteArray tx;
+    tx.append((char)((start >> 8) & 0xFF));
+    tx.append((char)(start & 0xFF));
+    tx.append((char)((cnt >> 8) & 0xFF));
+    tx.append((char)(cnt & 0xFF));
+
+    QByteArray rx;
+    QString err;
+    qint64 txB = 0, rxB = 0;
+    quint8 mbErr = 0;
+    bool ok = m_client->transact((quint8)info.readFunc, tx, rx, err, &txB, &rxB, &mbErr);
+    m_tx += (quint32)txB;
+    if (ok) m_rx += (quint32)rxB;
+    else m_errCount++;
+
+    if (!ok)
     {
-        if (q == 1 && !planned.contains(start))
+        // 区分超时 / 设备异常 / 其它无效；只标记本分片覆盖的地址，
+        // 其它分片各自独立处理，避免连累通信正常的寄存器
+        int status;
+        qint64 errValue = 0;
+        QString errText;
+        if (mbErr != 0)
         {
-            ++start;
-            continue;
+            status   = ReadError;
+            errValue = mbErr;
+            errText  = ModbusCodec::exceptionText(mbErr);
         }
-        int cnt = qMin(q, maxA - start + 1);
-        QByteArray tx;
-        tx.append((char)((start >> 8) & 0xFF));
-        tx.append((char)(start & 0xFF));
-        tx.append((char)((cnt >> 8) & 0xFF));
-        tx.append((char)(cnt & 0xFF));
-
-        QByteArray rx;
-        QString err;
-        qint64 txB = 0, rxB = 0;
-        quint8 mbErr = 0;
-        bool ok = m_client->transact((quint8)info.readFunc, tx, rx, err, &txB, &rxB, &mbErr);
-        m_tx += (quint32)txB;
-        if (ok) m_rx += (quint32)rxB;
-        else m_errCount++;
-
-        if (!ok)
+        else if (err == "响应超时")
         {
-            // 区分超时 / 设备异常 / 其它无效；只标记本次分片覆盖的地址，
-            // 并继续处理其余分片，避免连累通信正常的寄存器
-            int status;
-            qint64 errValue = 0;
-            QString errText;
-            if (mbErr != 0)
-            {
-                status   = ReadError;
-                errValue = mbErr;
-                errText  = ModbusCodec::exceptionText(mbErr);
-            }
-            else if (err == "响应超时")
-            {
-                status  = ReadTimeout;
-                errText = err;
-            }
-            else
-            {
-                status  = ReadInvalid;
-                errText = err;
-            }
-            emit logError(QTime::currentTime().toString("hh:mm:ss.zzz"), errText);
-            const int chunkEnd = start + cnt;
-            foreach (const RegPlanItem &it, items)
-            {
-                if (it.address < start || it.address >= chunkEnd)
-                    continue;  // 其它分片各自独立处理
-                emit readResult(areaIndex, it.address, status, 0, errText, errValue);
-            }
-            start += cnt;
-            continue;
-        }
-
-        // 解析响应，建立地址->值 映射
-        QMap<int, qint64> values;
-        if (rx.size() < 1)
-        {
-            continue;
-        }
-        int byteCount = (quint8)rx[0];
-        const char *data = rx.constData() + 1;
-        if (info.readFunc == 1 || info.readFunc == 2)
-        {
-            for (int i = 0; i < cnt; ++i)
-            {
-                int addr = start + i;
-                int bit = (data[i / 8] >> (i % 8)) & 0x01;
-                values[addr] = bit;
-            }
+            status  = ReadTimeout;
+            errText = err;
         }
         else
         {
-            int n = byteCount / 2;
-            for (int i = 0; i < cnt && i < n; ++i)
-            {
-                int addr = start + i;
-                int hi = (quint8)data[2 * i];
-                int lo = (quint8)data[2 * i + 1];
-                quint16 word = (quint16)((hi << 8) | lo);
-                // 默认按 U16；S16 在视图侧由类型解析，这里统一给出无符号值
-                values[addr] = word;
-            }
+            status  = ReadInvalid;
+            errText = err;
         }
-        // 仅处理本分片所覆盖的地址，避免被后续分片误判为 ReadInvalid 而覆盖
+        emit logError(QTime::currentTime().toString("hh:mm:ss.zzz"), errText);
         const int chunkEnd = start + cnt;
         foreach (const RegPlanItem &it, items)
         {
             if (it.address < start || it.address >= chunkEnd)
-                continue;  // 由覆盖该地址的其它分片负责
-
-            QMap<int, qint64>::const_iterator itv = values.find(it.address);
-            if (itv != values.end())
-            {
-                qint64 v = itv.value();
-                if (it.type == TypeS16)
-                {
-                    qint16 s = (qint16)(quint16)v;
-                    v = s;
-                }
-                emit readResult(areaIndex, it.address, ReadOk, v, QString(), 0);
-            }
-            else
-            {
-                emit readResult(areaIndex, it.address, ReadInvalid, 0, QString(), 0);
-            }
+                continue;  // 其它分片各自独立处理
+            emit readResult(areaIndex, it.address, status, 0, errText, errValue);
         }
-        start += cnt;
+        return;
+    }
+
+    // 解析响应，建立地址->值 映射
+    QMap<int, qint64> values;
+    if (rx.size() < 1)
+        return;
+    int byteCount = (quint8)rx[0];
+    const char *data = rx.constData() + 1;
+    if (info.readFunc == 1 || info.readFunc == 2)
+    {
+        for (int i = 0; i < cnt; ++i)
+        {
+            int addr = start + i;
+            int bit = (data[i / 8] >> (i % 8)) & 0x01;
+            values[addr] = bit;
+        }
+    }
+    else
+    {
+        int n = byteCount / 2;
+        for (int i = 0; i < cnt && i < n; ++i)
+        {
+            int addr = start + i;
+            int hi = (quint8)data[2 * i];
+            int lo = (quint8)data[2 * i + 1];
+            quint16 word = (quint16)((hi << 8) | lo);
+            // 默认按 U16；S16 在视图侧由类型解析，这里统一给出无符号值
+            values[addr] = word;
+        }
+    }
+    // 仅处理本分片所覆盖的地址，其它地址由覆盖它的分片负责
+    const int chunkEnd = start + cnt;
+    foreach (const RegPlanItem &it, items)
+    {
+        if (it.address < start || it.address >= chunkEnd)
+            continue;
+
+        QMap<int, qint64>::const_iterator itv = values.find(it.address);
+        if (itv != values.end())
+        {
+            qint64 v = itv.value();
+            if (it.type == TypeS16)
+                v = (qint16)(quint16)v;
+            emit readResult(areaIndex, it.address, ReadOk, v, QString(), 0);
+        }
+        else
+        {
+            emit readResult(areaIndex, it.address, ReadInvalid, 0, QString(), 0);
+        }
     }
 }
 

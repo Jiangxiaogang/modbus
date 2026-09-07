@@ -47,6 +47,9 @@ private slots:
 
 private:
     void runReadArea(int areaIndex, const QList<RegPlanItem> &items);
+    // 发起一次读请求(start 起 cnt 个)，失败仅标记分片内地址
+    void readChunk(int areaIndex, int start, int cnt,
+                   const QList<RegPlanItem> &items);
 
     ModbusConfig           m_cfg;
     QList<RegPlanItem>     m_plans[4];
