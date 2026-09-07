@@ -103,9 +103,13 @@ int RegisterView::addRegisters(int areaIndex, int startAddr, int count)
         rd.plcAddr = plc;
         rd.protoAddr = proto;
         rd.type = def;
-        m_rows[areaIndex].append(rd);
 
-        int r = t->rowCount();
+        // 按地址升序找插入位置，m_rows 与表格行同步插入，保持列表始终有序
+        int r = 0;
+        while (r < m_rows[areaIndex].size()
+               && m_rows[areaIndex][r].protoAddr < proto)
+            ++r;
+        m_rows[areaIndex].insert(r, rd);
         t->insertRow(r);
 
         QTableWidgetItem *name = new QTableWidgetItem(rd.name);
@@ -154,9 +158,18 @@ int RegisterView::addRegisters(int areaIndex, int startAddr, int count)
         if (!info.writable)
         {
             QTableWidgetItem *set = t->item(r, ColSet);
-            if (set) set->setFlags(set->flags() & ~Qt::ItemIsEditable);
+            set->setText("N/A");
+            set->setFlags(set->flags() & ~Qt::ItemIsEditable);
             wbtn->setEnabled(false);
         }
+    }
+    // 中间插入使后续行号整体后移，统一复位行内控件的行号属性
+    for (int r = 0; r < t->rowCount(); ++r)
+    {
+        QComboBox *c = qobject_cast<QComboBox *>(t->cellWidget(r, ColType));
+        if (c) c->setProperty("row", r);
+        QPushButton *b = qobject_cast<QPushButton *>(t->cellWidget(r, ColWrite));
+        if (b) b->setProperty("row", r);
     }
     t->setSortingEnabled(false);
     rebuildPlan(areaIndex);
@@ -257,7 +270,7 @@ void RegisterView::onReadResult(const ReadPoint &pt)
 
     case ReadError:
         // Modbus 异常码与错误描述显示在状态列，原始值列无有效数据
-        st->setText(QString("错误 0x%1 %2")
+        st->setText(QString("错误:0x%1 %2")
                     .arg((quint8)pt.errValue, 2, 16, QLatin1Char('0'))
                     .arg(pt.errText));
         st->setTextColor(Qt::red);

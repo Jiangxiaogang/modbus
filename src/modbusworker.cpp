@@ -227,7 +227,6 @@ void ModbusWorker::readChunk(int areaIndex, int start, int cnt,
             int hi = (quint8)data[2 * i];
             int lo = (quint8)data[2 * i + 1];
             quint16 word = (quint16)((hi << 8) | lo);
-            // 默认按 U16；S16 在视图侧由类型解析，这里统一给出无符号值
             values[addr] = word;
         }
     }
@@ -280,8 +279,8 @@ void ModbusWorker::writeRegister(int areaIndex, int address, DataType type, qint
             tx.append((char)((address >> 8) & 0xFF));
             tx.append((char)(address & 0xFF));
             tx.append((char)0x00);
-            tx.append((char)0x01); // 数量=1
-            tx.append((char)0x01);                       // 字节数=1
+            tx.append((char)0x01);
+            tx.append((char)0x01);
             tx.append((char)b);
         }
         else     // 05
