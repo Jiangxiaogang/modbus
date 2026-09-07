@@ -18,7 +18,7 @@ ConnectionPanel::ConnectionPanel(QWidget *parent)
 {
     QVBoxLayout *root = new QVBoxLayout(this);
     root->setMargin(0);
-    setContentsMargins(4,4,0,0);
+    setContentsMargins(4,4,0,4);
     // ---------- 通道配置 ----------
     QGroupBox *connGrp = new QGroupBox("通道配置", this);
     QFormLayout *connLayout = new QFormLayout(connGrp);
@@ -122,6 +122,7 @@ ConnectionPanel::ConnectionPanel(QWidget *parent)
     m_readModeCombo = new QComboBox(protoGrp);
     m_readModeCombo->addItem("单点模式");
     m_readModeCombo->addItem("批量模式");
+    m_readModeCombo->setCurrentIndex(1);
     pf->addRow("读取模式:", m_readModeCombo);
 
     m_coilFuncCombo = new QComboBox(protoGrp);
@@ -144,7 +145,8 @@ ConnectionPanel::ConnectionPanel(QWidget *parent)
     root->addWidget(m_serGroup);
     root->addWidget(m_netGroup);
     root->addWidget(protoGrp);
-    root->addStretch(1);
+    // 下方可伸缩占位组框：填充与底部通信日志之间的空白区域
+    root->addWidget(new QGroupBox(this), 1);
 
     // 信号连接
     connect(m_connCombo, SIGNAL(currentIndexChanged(int)), this, SLOT(onConnChanged(int)));

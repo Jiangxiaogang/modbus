@@ -38,13 +38,13 @@ CommLogView::CommLogView(QWidget *parent)
 
 void CommLogView::appendTx(bool isWrite, const QString &ts, const QString &hex)
 {
-    appendLine(isWrite ? "发·写" : "发·读",
+    appendLine(isWrite ? "发送" : "发送",
                isWrite ? kTxWriteColor : kTxReadColor, ts, hex);
 }
 
 void CommLogView::appendRx(bool isWrite, const QString &ts, const QString &hex)
 {
-    appendLine(isWrite ? "收·写" : "收·读",
+    appendLine(isWrite ? "接收" : "接收",
                isWrite ? kRxWriteColor : kRxReadColor, ts, hex);
 }
 
