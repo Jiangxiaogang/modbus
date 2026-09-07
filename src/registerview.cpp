@@ -94,9 +94,7 @@ void RegisterView::addRegisters(int areaIndex, int startAddr, int count)
                   : QString::number(plc);
         rd.plcAddr = plc;
         rd.protoAddr = proto;
-        rd.valid = false;
         rd.type = def;
-        rd.rawValue = 0;
         m_rows[areaIndex].append(rd);
 
         int r = t->rowCount();
@@ -217,29 +215,52 @@ void RegisterView::onWriteClicked()
     emit writeRequested(area, rd.protoAddr, rd.type, val);
 }
 
-void RegisterView::onReadResult(int areaIndex, int protoAddr, bool valid, qint64 value)
+// 实时数据来自 RealtimeData 中转站转发的 dataChanged 信号
+void RegisterView::onReadResult(const ReadPoint &pt)
 {
-    if (areaIndex < 0 || areaIndex > 3) return;
-    QTableWidget *t = m_tables[areaIndex];
-    int row = findRow(t, protoAddr);
+    if (pt.areaIndex < 0 || pt.areaIndex > 3) return;
+    QTableWidget *t = m_tables[pt.areaIndex];
+    int row = findRow(t, pt.address);
     if (row < 0) return;
-    RowData &rd = m_rows[areaIndex][row];
-    rd.valid = valid;
-    rd.rawValue = value;
 
-    QTableWidgetItem *st = t->item(row, ColStatus);
+    QTableWidgetItem *st  = t->item(row, ColStatus);
     QTableWidgetItem *raw = t->item(row, ColRaw);
-    if (valid)
+    st->setToolTip(QString());
+    raw->setToolTip(QString());
+
+    switch (pt.status)
     {
+    case ReadOk:
         st->setText("有效");
         st->setTextColor(Qt::darkGreen);
-        raw->setText(QString::number(value));
-    }
-    else
-    {
+        raw->setText(QString::number(pt.value));
+        break;
+
+    case ReadTimeout:
+        st->setText("超时");
+        st->setTextColor(Qt::red);
+        raw->setText("—");
+        st->setToolTip(pt.errText);
+        break;
+
+    case ReadError:
+        st->setText("错误");
+        st->setTextColor(Qt::red);
+        // 展示 Modbus 错误值(异常码) 与错误字符串
+        raw->setText(QString("0x%1 %2")
+                     .arg((quint8)pt.errValue, 2, 16, QLatin1Char('0'))
+                     .arg(pt.errText));
+        st->setToolTip(pt.errText);
+        raw->setToolTip(pt.errText);
+        break;
+
+    default: // ReadInvalid
         st->setText("无效");
         st->setTextColor(Qt::red);
         raw->setText("");
+        if (!pt.errText.isEmpty())
+            st->setToolTip(pt.errText);
+        break;
     }
 }
 

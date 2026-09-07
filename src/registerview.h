@@ -14,9 +14,9 @@ struct RowData
     QString  name;
     int      plcAddr;     // PLC 地址 (如 40001)
     int      protoAddr;   // 协议地址 (0基)
-    bool     valid;
     DataType type;
-    qint64   rawValue;
+    // 实时值 (valid / rawValue) 由 RealtimeData 中转站统一持有，
+    // 本结构仅保留点位定义，避免双份数据源。
 };
 
 // 寄存器数据区：4 个 TAB（0/1/3/4 区）
@@ -33,7 +33,7 @@ signals:
     void writeRequested(int areaIndex, int protoAddr, DataType type, qint64 value);
 
 public slots:
-    void onReadResult(int areaIndex, int protoAddr, bool valid, qint64 value);
+    void onReadResult(const ReadPoint &pt);
     void onWriteResult(int areaIndex, int protoAddr, bool ok, const QString &msg);
 
 private slots:

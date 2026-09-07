@@ -62,10 +62,12 @@ QString ModbusClient::errorString() const
 
 bool ModbusClient::transact(quint8 func, const QByteArray &txPdu,
                             QByteArray &rxPdu, QString &err,
-                            qint64 *txBytes, qint64 *rxBytes)
+                            qint64 *txBytes, qint64 *rxBytes,
+                            quint8 *modbusErr)
 {
     rxPdu.clear();
     err.clear();
+    if (modbusErr) *modbusErr = 0;
     if (!isOpen())
     {
         err = "未连接";
@@ -99,8 +101,9 @@ bool ModbusClient::transact(quint8 func, const QByteArray &txPdu,
     }
     if (ModbusCodec::isException(rfunc, func))
     {
-        err = "从站异常: " + ModbusCodec::exceptionText(
-                  rPdu.isEmpty() ? 0 : (quint8)rPdu[0]);
+        quint8 code = rPdu.isEmpty() ? 0 : (quint8)rPdu[0];
+        if (modbusErr) *modbusErr = code;
+        err = "从站异常: " + ModbusCodec::exceptionText(code);
         return false;
     }
     if (rfunc != func)

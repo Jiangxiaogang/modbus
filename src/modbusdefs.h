@@ -34,6 +34,28 @@ enum DataType
     TypeS16
 };
 
+// 读取结果状态：用于区分“正常/超时/设备错误/无效”
+enum ReadStatus
+{
+    ReadOk = 0,       // 读取成功
+    ReadTimeout,      // 响应超时（无响应）
+    ReadError,        // 设备返回异常响应（Modbus 异常码）
+    ReadInvalid       // 其它无效（解析失败 / 功能码不符等）
+};
+
+// 一次读取结果（中转站与展示之间传递的单一对象，以引用传递）
+struct ReadPoint
+{
+    int      areaIndex;  // 数据区 0..3
+    int      address;    // 协议地址 (0基)
+    int      status;     // ReadStatus
+    qint64   value;      // 正常时的原始值
+    qint64   errValue;   // 错误时的 Modbus 异常码
+    QString  errText;    // 错误/超时描述
+    ReadPoint()
+        : areaIndex(0), address(0), status(ReadInvalid), value(0), errValue(0) {}
+};
+
 // 四个数据区。index 用于数组下标 0..3
 // 0区: 遥控(线圈)    PLC 00001-09999  读01 写05/15
 // 1区: 遥信(离散输入) PLC 10001-19999 读02

@@ -1,5 +1,6 @@
 #include "modbusworker.h"
 #include "modbusclient.h"
+#include "modbuscodec.h"
 #include "modbusdefs.h"
 #include <QTimer>
 #include <QMap>
@@ -127,16 +128,36 @@ void ModbusWorker::runReadArea(int areaIndex, const QList<RegPlanItem> &items)
         QByteArray rx;
         QString err;
         qint64 txB = 0, rxB = 0;
-        bool ok = m_client->transact((quint8)info.readFunc, tx, rx, err, &txB, &rxB);
+        quint8 mbErr = 0;
+        bool ok = m_client->transact((quint8)info.readFunc, tx, rx, err, &txB, &rxB, &mbErr);
         m_tx += (quint32)txB;
         if (ok) m_rx += (quint32)rxB;
         else m_errCount++;
 
         if (!ok)
         {
-            // 整个区标记无效
+            // 区分超时 / 设备异常 / 其它无效，给整个区统一标记
+            int status;
+            qint64 errValue = 0;
+            QString errText;
+            if (mbErr != 0)
+            {
+                status   = ReadError;
+                errValue = mbErr;
+                errText  = ModbusCodec::exceptionText(mbErr);
+            }
+            else if (err == "响应超时")
+            {
+                status  = ReadTimeout;
+                errText = err;
+            }
+            else
+            {
+                status  = ReadInvalid;
+                errText = err;
+            }
             foreach (const RegPlanItem &it, items)
-                emit readResult(areaIndex, it.address, false, 0);
+                emit readResult(areaIndex, it.address, status, 0, errText, errValue);
             return;
         }
 
@@ -182,11 +203,11 @@ void ModbusWorker::runReadArea(int areaIndex, const QList<RegPlanItem> &items)
                     qint16 s = (qint16)(quint16)v;
                     v = s;
                 }
-                emit readResult(areaIndex, it.address, true, v);
+                emit readResult(areaIndex, it.address, ReadOk, v, QString(), 0);
             }
             else
             {
-                emit readResult(areaIndex, it.address, false, 0);
+                emit readResult(areaIndex, it.address, ReadInvalid, 0, QString(), 0);
             }
         }
         start += cnt;

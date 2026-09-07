@@ -28,8 +28,9 @@ signals:
     void connectionStateChanged(bool connected);
     void connectError(const QString &msg);
     void statsUpdated(quint32 tx, quint32 rx, quint32 err);
-    // 单点读取结果：valid=false 且 address<0 表示整个区轮询失败
-    void readResult(int areaIndex, int address, bool valid, qint64 value);
+    // 单点读取结果：status 为 ReadStatus；错误时携带 Modbus 异常码与描述
+    void readResult(int areaIndex, int address, int status,
+                    qint64 value, const QString &errText, qint64 errValue);
     void writeResult(int areaIndex, int address, bool ok, const QString &msg);
 
 private slots:

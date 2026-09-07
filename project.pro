@@ -20,6 +20,7 @@ SOURCES += \
     src/udptransport.cpp \
     src/modbusclient.cpp \
     src/modbusworker.cpp \
+    src/realtimedata.cpp \
     src/serialtransport.cpp \
     src/seriallist.cpp
 
@@ -31,11 +32,11 @@ HEADERS += \
     src/addregisterdialog.h \
     src/modbusdefs.h \
     src/modbuscodec.h \
-    src/transport.h \
     src/tcptransport.h \
     src/udptransport.h \
     src/modbusclient.h \
     src/modbusworker.h \
+    src/realtimedata.h \
     src/modbustransport.h \
     src/serialtransport.h \
     src/seriallist.h

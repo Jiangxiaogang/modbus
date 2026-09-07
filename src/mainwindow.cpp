@@ -2,6 +2,7 @@
 #include "connectionpanel.h"
 #include "registerview.h"
 #include "modbusworker.h"
+#include "realtimedata.h"
 #include "modbusdefs.h"
 
 #include <QSplitter>
@@ -40,6 +41,9 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_thread, SIGNAL(finished()), m_worker, SLOT(deleteLater()));
     m_thread->start();
 
+    // 实时数据对象（中转站），位于 GUI 线程
+    m_data = new RealtimeData(this);
+
     // 面板 -> 工作线程
     connect(m_panel, SIGNAL(connectClicked(ModbusConfig*)), m_worker, SLOT(connectDevice(ModbusConfig*)));
     connect(m_panel, SIGNAL(disconnectClicked()), m_worker, SLOT(disconnectDevice()));
@@ -52,7 +56,13 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_worker, SIGNAL(connectionStateChanged(bool)), this, SLOT(onConnectionState(bool)));
     connect(m_worker, SIGNAL(connectError(QString)), this, SLOT(onConnectError(QString)));
     connect(m_worker, SIGNAL(statsUpdated(quint32, quint32, quint32)), this, SLOT(onStats(quint32, quint32, quint32)));
-    connect(m_worker, SIGNAL(readResult(int, int, bool, qint64)), m_view, SLOT(onReadResult(int, int, bool, qint64)));
+
+    // 采集 -> 中转站 -> 展示：读到数据先经 API 写入 RealtimeData，再转发给视图显示
+    connect(m_worker, SIGNAL(readResult(int, int, int, qint64, QString, qint64)),
+            this,      SLOT(onWorkerReadResult(int, int, int, qint64, QString, qint64)));
+    connect(m_data,   SIGNAL(dataChanged(ReadPoint)),
+            m_view,    SLOT(onReadResult(ReadPoint)));
+
     connect(m_worker, SIGNAL(writeResult(int, int, bool, QString)), m_view, SLOT(onWriteResult(int, int, bool, QString)));
 }
 
@@ -74,4 +84,17 @@ void MainWindow::onStats(quint32 tx, quint32 rx, quint32 err)
 {
     m_lblStats->setText(QString("TX:%1  RX:%2  ERR:%3")
                         .arg(tx).arg(rx).arg(err));
+}
+
+void MainWindow::onWorkerReadResult(int areaIndex, int address, int status,
+                                     qint64 value, const QString &errText, qint64 errValue)
+{
+    ReadPoint pt;
+    pt.areaIndex = areaIndex;
+    pt.address   = address;
+    pt.status    = status;
+    pt.value     = value;
+    pt.errValue  = errValue;
+    pt.errText   = errText;
+    m_data->update(pt);
 }
