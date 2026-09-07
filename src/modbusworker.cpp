@@ -191,9 +191,13 @@ void ModbusWorker::runReadArea(int areaIndex, const QList<RegPlanItem> &items)
                 values[addr] = word;
             }
         }
-        // 仅向计划内存在的地址发结果
+        // 仅处理本分片所覆盖的地址，避免被后续分片误判为 ReadInvalid 而覆盖
+        const int chunkEnd = start + cnt;
         foreach (const RegPlanItem &it, items)
         {
+            if (it.address < start || it.address >= chunkEnd)
+                continue;  // 由覆盖该地址的其它分片负责
+
             QMap<int, qint64>::const_iterator itv = values.find(it.address);
             if (itv != values.end())
             {

@@ -3,6 +3,7 @@
 
 #include <QString>
 #include <QList>
+#include <QMetaType>
 
 // 通道类型
 enum ChannelType
@@ -33,6 +34,8 @@ enum DataType
     TypeU16,
     TypeS16
 };
+// 供跨线程 QueuedConnection 传递 DataType 参数（QObject::connect 排队参数要求已注册）
+Q_DECLARE_METATYPE(DataType)
 
 // 读取结果状态：用于区分“正常/超时/设备错误/无效”
 enum ReadStatus
@@ -59,8 +62,8 @@ struct ReadPoint
 // 四个数据区。index 用于数组下标 0..3
 // 0区: 遥控(线圈)    PLC 00001-09999  读01 写05/15
 // 1区: 遥信(离散输入) PLC 10001-19999 读02
-// 3区: 遥调(输入寄存器) PLC 30001-39999 读04
-// 4区: 遥测(保持寄存器) PLC 40001-49999 读03 写06/16
+// 3区: 遥测(输入寄存器) PLC 30001-39999 读04
+// 4区: 遥调(保持寄存器) PLC 40001-49999 读03 写06/16
 struct AreaInfo
 {
     int      index;       // 0..3 (界面顺序)
@@ -78,8 +81,8 @@ inline const AreaInfo &areaInfo(int index)
     {
         { 0, "0区(遥控)",      1,    1,  5, 15, true  },
         { 1, "1区(遥信)",  10001,    2,  0,  0, false },
-        { 2, "3区(遥调)",  30001,    4,  0,  0, false },
-        { 3, "4区(遥测)",  40001,    3,  6, 16, true  }
+        { 2, "3区(遥测)",  30001,    4,  0,  0, false },
+        { 3, "4区(遥调)",  40001,    3,  6, 16, true  }
     };
     return areas[index];
 }
