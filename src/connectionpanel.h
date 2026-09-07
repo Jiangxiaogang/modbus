@@ -26,6 +26,7 @@ public slots:
     void setConnected(bool connected);
 
 private slots:
+    void onConnChanged(int idx);
     void onConnectButton();
 
 private:
@@ -38,10 +39,12 @@ private:
     QComboBox   *m_connCombo;
     QPushButton *m_connectBtn;
 
+    QGroupBox   *m_serGroup;
     QComboBox   *m_serPortCombo;
     QComboBox   *m_baudRateCombo;
     QComboBox   *m_parityCombo;
 
+    QGroupBox   *m_netGroup;
     QComboBox   *m_netTypeCombo;
     QLineEdit   *m_netAddrEdit;
     QSpinBox    *m_netPortSpin;

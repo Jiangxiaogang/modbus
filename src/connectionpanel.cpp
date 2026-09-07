@@ -17,8 +17,8 @@ ConnectionPanel::ConnectionPanel(QWidget *parent)
     , m_connected(false)
 {
     QVBoxLayout *root = new QVBoxLayout(this);
-    root->setMargin(4);
-
+    root->setMargin(0);
+    setContentsMargins(10,10,0,0);
     // ---------- 通道配置 ----------
     QGroupBox *connGrp = new QGroupBox("通道配置", this);
     QFormLayout *connLayout = new QFormLayout(connGrp);
@@ -28,7 +28,7 @@ ConnectionPanel::ConnectionPanel(QWidget *parent)
     m_connCombo->addItem("网络");
     m_connCombo->setCurrentIndex(0);
 
-    m_connectBtn = new QPushButton("连接(&C)", connGrp);
+    m_connectBtn = new QPushButton("连接", connGrp);
 
     QHBoxLayout *connOpsLayout = new QHBoxLayout;
     connOpsLayout->addWidget(m_connCombo);
@@ -37,53 +37,69 @@ ConnectionPanel::ConnectionPanel(QWidget *parent)
     connOpsLayout->setStretchFactor(m_connectBtn, 1);
 
     connLayout->addRow("连接方式:", connOpsLayout);
+    for(int i = 0; i < connLayout->rowCount(); i++)
+    {
+        QLayoutItem *item = connLayout->itemAt(i, QFormLayout::LabelRole);
+        item->widget()->setFixedWidth(55);
+    }
 
     // ---------- 串口通道配置 ----------
-    QGroupBox *serGrp = new QGroupBox("串口配置", this);
-    QFormLayout *serLayout = new QFormLayout(serGrp);
+    m_serGroup = new QGroupBox("串口配置", this);
+    QFormLayout *serLayout = new QFormLayout(m_serGroup);
 
-    m_serPortCombo = new QComboBox(serGrp);
+    m_serPortCombo = new QComboBox(m_serGroup);
     refreshSerialPorts();
 
-    m_baudRateCombo = new QComboBox(serGrp);
+    m_baudRateCombo = new QComboBox(m_serGroup);
     m_baudRateCombo->setEditable(true);
     QStringList bauds;
     bauds << "1200" << "2400" << "4800" << "9600" << "19200" << "38400" << "57600" << "115200";
     m_baudRateCombo->addItems(bauds);
     m_baudRateCombo->setCurrentIndex(3);
-    m_parityCombo = new QComboBox(serGrp);
+    m_parityCombo = new QComboBox(m_serGroup);
     m_parityCombo->addItems(QStringList() << "无" << "奇校验" << "偶校验");
     m_parityCombo->setCurrentIndex(0);
 
     serLayout->addRow("串口号:", m_serPortCombo);
     serLayout->addRow("波特率:", m_baudRateCombo);
     serLayout->addRow("校验位:", m_parityCombo);
+    for(int i = 0; i < serLayout->rowCount(); i++)
+    {
+        QLayoutItem *item = serLayout->itemAt(i, QFormLayout::LabelRole);
+        item->widget()->setFixedWidth(55);
+    }
 
     // ---------- 网络通道配置 ----------
-    QGroupBox *netGrp = new QGroupBox("网络配置", this);
-    QFormLayout *netLayout = new QFormLayout(netGrp);
+    m_netGroup = new QGroupBox("网络配置", this);
+    QFormLayout *netLayout = new QFormLayout(m_netGroup);
 
-    m_netTypeCombo = new QComboBox(netGrp);
+    m_netTypeCombo = new QComboBox(m_netGroup);
     m_netTypeCombo->addItem("TCP");
     m_netTypeCombo->addItem("UDP");
     m_netTypeCombo->setCurrentIndex(0);
-    m_netAddrEdit = new QLineEdit("127.0.0.1", netGrp);
-    m_netPortSpin = new QSpinBox(netGrp);
+    m_netAddrEdit = new QLineEdit("127.0.0.1", m_netGroup);
+    m_netPortSpin = new QSpinBox(m_netGroup);
     m_netPortSpin->setRange(1, 65535);
     m_netPortSpin->setValue(502);
+    m_netGroup->setVisible(false);
 
     netLayout->addRow("网络协议:", m_netTypeCombo);
     netLayout->addRow("IP地址:", m_netAddrEdit);
     netLayout->addRow("端口号:", m_netPortSpin);
+    for(int i = 0; i < netLayout->rowCount(); i++)
+    {
+        QLayoutItem *item = netLayout->itemAt(i, QFormLayout::LabelRole);
+        item->widget()->setFixedWidth(55);
+    }
 
     // ---------- 协议配置 ----------
     QGroupBox *protoGrp = new QGroupBox("协议配置", this);
     QFormLayout *pf = new QFormLayout(protoGrp);
 
     m_protoCombo = new QComboBox(protoGrp);
-    m_protoCombo->addItem("ModbusRTU");
-    m_protoCombo->addItem("ModbusTCP");
-    m_protoCombo->addItem("ModbusASCII");
+    m_protoCombo->addItem("Modbus-RTU");
+    m_protoCombo->addItem("Modbus-TCP");
+    m_protoCombo->addItem("Modbus-ASCII");
     pf->addRow("协议类型:", m_protoCombo);
 
     m_slaveSpin = new QSpinBox(protoGrp);
@@ -94,13 +110,13 @@ ConnectionPanel::ConnectionPanel(QWidget *parent)
     m_timeoutSpin = new QSpinBox(protoGrp);
     m_timeoutSpin->setRange(100, 10000);
     m_timeoutSpin->setValue(1000);
-    m_timeoutSpin->setSuffix(" ms");
+    m_timeoutSpin->setSuffix(" 毫秒");
     pf->addRow("响应超时:", m_timeoutSpin);
 
     m_pollSpin = new QSpinBox(protoGrp);
     m_pollSpin->setRange(100, 10000);
     m_pollSpin->setValue(1000);
-    m_pollSpin->setSuffix(" ms");
+    m_pollSpin->setSuffix(" 毫秒");
     pf->addRow("轮询间隔:", m_pollSpin);
 
     m_readModeCombo = new QComboBox(protoGrp);
@@ -118,13 +134,20 @@ ConnectionPanel::ConnectionPanel(QWidget *parent)
     m_regFuncCombo->addItem("16");
     pf->addRow("遥调命令:", m_regFuncCombo);
 
+    for(int i = 0; i < pf->rowCount(); i++)
+    {
+        QLayoutItem *item = pf->itemAt(i, QFormLayout::LabelRole);
+        item->widget()->setFixedWidth(55);
+    }
+
     root->addWidget(connGrp);
-    root->addWidget(serGrp);
-    root->addWidget(netGrp);
+    root->addWidget(m_serGroup);
+    root->addWidget(m_netGroup);
     root->addWidget(protoGrp);
     root->addStretch(1);
 
     // 信号连接
+    connect(m_connCombo, SIGNAL(currentIndexChanged(int)), this, SLOT(onConnChanged(int)));
     connect(m_connectBtn, SIGNAL(clicked()), this, SLOT(onConnectButton()));
 }
 
@@ -178,6 +201,12 @@ void ConnectionPanel::setWidgetEnabled(bool enabled)
     m_readModeCombo->setEnabled(enabled);
     m_coilFuncCombo->setEnabled(enabled);
     m_regFuncCombo->setEnabled(enabled);
+}
+
+void ConnectionPanel::onConnChanged(int idx)
+{
+    m_serGroup->setVisible(idx == 0);
+    m_netGroup->setVisible(idx == 1);
 }
 
 void ConnectionPanel::onConnectButton()

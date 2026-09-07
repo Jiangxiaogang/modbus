@@ -9,13 +9,14 @@
 #include <QLabel>
 #include <QThread>
 #include <QMessageBox>
+#include <QStyleFactory>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
     setWindowTitle("ModbusTool");
-    setMinimumSize(900, 520);
-    resize(900, 520);
+    setMinimumSize(900, 450);
+    resize(900, 450);
 
     // 左侧连接区 / 右侧数据区
     QSplitter *split = new QSplitter(Qt::Horizontal, this);
@@ -28,8 +29,9 @@ MainWindow::MainWindow(QWidget *parent)
     // 状态栏
     m_lblConn = new QLabel("未连接", this);
     m_lblStats = new QLabel("TX:0  RX:0  ERR:0", this);
-    statusBar()->addWidget(m_lblConn, 0);
-    statusBar()->addWidget(m_lblStats, 1);
+    statusBar()->addWidget(m_lblConn, 1);
+    statusBar()->addPermanentWidget(m_lblStats);
+    statusBar()->setStyleSheet("QStatusBar {border-top: 1px solid palette(mid);}");
 
     // 工作线程
     m_thread = new QThread(this);

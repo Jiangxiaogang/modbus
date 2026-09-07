@@ -39,16 +39,16 @@ void RegisterView::setupTab(int areaIndex)
     t->verticalHeader()->setVisible(true);
 
     QStringList headers;
-    headers << "寄存器名称" << "寄存器地址" << "数据状态" << "数据类型" << "原始值" << "设定值" << "写入";
+    headers << "寄存器名称" << "寄存器地址" << "数据类型" << "原始值" << "设定值" << "写入" <<  "状态";
     t->setHorizontalHeaderLabels(headers);
     t->horizontalHeader()->setStretchLastSection(false);
     t->setColumnWidth(ColName, 120);
-    t->setColumnWidth(ColAddr, 90);
-    t->setColumnWidth(ColStatus, 70);
-    t->setColumnWidth(ColType, 70);
+    t->setColumnWidth(ColAddr, 80);
+    t->setColumnWidth(ColStatus, 80);
+    t->setColumnWidth(ColType, 80);
     t->setColumnWidth(ColRaw, 80);
     t->setColumnWidth(ColSet, 80);
-    t->setColumnWidth(ColWrite, 60);
+    t->setColumnWidth(ColWrite, 80);
     t->horizontalHeader()->setHighlightSections(false);
     t->verticalHeader()->setHighlightSections(false);
     int hdrH = t->horizontalHeader()->height();
