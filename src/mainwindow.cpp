@@ -5,6 +5,8 @@
 #include "modbusworker.h"
 #include "realtimedata.h"
 #include "modbusdefs.h"
+#include "aboutdialog.h"
+#include "version.h"
 
 #include <QSplitter>
 #include <QStatusBar>
@@ -13,11 +15,14 @@
 #include <QList>
 #include <QMessageBox>
 #include <QStyleFactory>
+#include <QShortcut>
+#include <QKeySequence>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
-    setWindowTitle("ModbusTool");
+    setWindowTitle(QString("%1 v%2")
+                   .arg(APP_PRODUCT_NAME).arg(APP_VERSION_STR));
     setMinimumSize(900, 500);
     resize(900, 560);
 
@@ -44,6 +49,10 @@ MainWindow::MainWindow(QWidget *parent)
     statusBar()->addWidget(m_lblConn, 1);
     statusBar()->addPermanentWidget(m_lblStats);
     statusBar()->setStyleSheet("QStatusBar {border-top: 1px solid palette(mid);}");
+
+    // F1 弹出“关于”对话框（无菜单栏，用快捷键提供入口）
+    QShortcut *aboutSc = new QShortcut(QKeySequence(Qt::Key_F1), this);
+    connect(aboutSc, SIGNAL(activated()), this, SLOT(showAbout()));
 
     // 工作线程
     m_thread = new QThread(this);
@@ -101,6 +110,12 @@ void MainWindow::onStats(quint32 tx, quint32 rx, quint32 err)
 {
     m_lblStats->setText(QString("TX:%1  RX:%2  ERR:%3")
                         .arg(tx).arg(rx).arg(err));
+}
+
+void MainWindow::showAbout()
+{
+    AboutDialog dlg(this);
+    dlg.exec();
 }
 
 void MainWindow::onWorkerReadResult(int areaIndex, int address, int status,

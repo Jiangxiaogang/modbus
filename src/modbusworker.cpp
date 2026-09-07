@@ -162,12 +162,9 @@ void ModbusWorker::readChunk(int areaIndex, int start, int cnt,
 
     QByteArray rx;
     QString err;
-    qint64 txB = 0, rxB = 0;
     quint8 mbErr = 0;
-    bool ok = m_client->transact((quint8)info.readFunc, tx, rx, err, &txB, &rxB, &mbErr);
-    m_tx += (quint32)txB;
-    if (ok) m_rx += (quint32)rxB;
-    else m_errCount++;
+    bool ok = m_client->transact((quint8)info.readFunc, tx, rx, err, 0, 0, &mbErr);
+    if (!ok) m_errCount++;
 
     if (!ok)
     {
@@ -267,7 +264,6 @@ void ModbusWorker::writeRegister(int areaIndex, int address, DataType type, qint
     QByteArray tx;
     quint8 func = 0;
     QString err;
-    qint64 txB = 0, rxB = 0;
     bool ok = false;
 
     if (areaIndex == 0)                   // 线圈
@@ -293,7 +289,7 @@ void ModbusWorker::writeRegister(int areaIndex, int address, DataType type, qint
             tx.append((char)0x00);
         }
         QByteArray rx;
-        ok = m_client->transact(func, tx, rx, err, &txB, &rxB);
+        ok = m_client->transact(func, tx, rx, err, 0, 0);
     }
     else                                  // 保持寄存器
     {
@@ -318,11 +314,10 @@ void ModbusWorker::writeRegister(int areaIndex, int address, DataType type, qint
             tx.append((char)(v & 0xFF));
         }
         QByteArray rx;
-        ok = m_client->transact(func, tx, rx, err, &txB, &rxB);
+        ok = m_client->transact(func, tx, rx, err, 0, 0);
     }
-    m_tx += (quint32)txB;
-    if (ok) m_rx += (quint32)rxB;
-    else m_errCount++;
+    if (!ok)
+        m_errCount++;
     if (!ok)
         emit logError(QTime::currentTime().toString("hh:mm:ss.zzz"), err);
     emit writeResult(areaIndex, address, ok, ok ? QString() : err);
@@ -331,12 +326,14 @@ void ModbusWorker::writeRegister(int areaIndex, int address, DataType type, qint
 
 void ModbusWorker::onFrameSent(const QByteArray &frame)
 {
+    ++m_tx; // 报文计数：每实际发出一帧计 1
     emit logTx(m_logIsWrite, QTime::currentTime().toString("hh:mm:ss.zzz"),
                QString::fromLatin1(ModbusCodec::toHex(frame)));
 }
 
 void ModbusWorker::onFrameReceived(const QByteArray &frame)
 {
+    ++m_rx; // 报文计数：每实际收到一帧计 1
     emit logRx(m_logIsWrite, QTime::currentTime().toString("hh:mm:ss.zzz"),
                QString::fromLatin1(ModbusCodec::toHex(frame)));
 }

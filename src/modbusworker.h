@@ -27,6 +27,7 @@ public slots:
 signals:
     void connectionStateChanged(bool connected);
     void connectError(const QString &msg);
+    // 通信统计：发送/接收报文帧数、错误次数（帧计数，非字节数）
     void statsUpdated(quint32 tx, quint32 rx, quint32 err);
     // 单点读取结果：status 为 ReadStatus；错误时携带 Modbus 异常码与描述
     void readResult(int areaIndex, int address, int status,
@@ -55,7 +56,7 @@ private:
     QList<RegPlanItem>     m_plans[4];
     ModbusClient          *m_client;
     QTimer                *m_timer;
-    quint32                m_tx, m_rx, m_errCount;
+    quint32                m_tx, m_rx, m_errCount; // 收发报文帧数 / 错误次数
     QMutex                 m_mutex;
     bool                   m_logIsWrite; // 当前事务是否为写操作（日志标签用）
 };

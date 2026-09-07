@@ -15,6 +15,7 @@ SOURCES += \
     src/registerview.cpp \
     src/commlogview.cpp \
     src/addregisterdialog.cpp \
+    src/aboutdialog.cpp \
     src/modbusdefs.cpp \
     src/modbuscodec.cpp \
     src/tcptransport.cpp \
@@ -32,6 +33,8 @@ HEADERS += \
     src/registerview.h \
     src/commlogview.h \
     src/addregisterdialog.h \
+    src/aboutdialog.h \
+    src/version.h \
     src/modbusdefs.h \
     src/modbuscodec.h \
     src/tcptransport.h \
