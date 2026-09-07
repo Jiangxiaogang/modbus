@@ -4,10 +4,36 @@
 #include "modbusdefs.h"
 #include <QWidget>
 #include <QList>
+#include <QStyledItemDelegate>
 
 class QTabWidget;
 class QTableWidget;
 class QTableWidgetItem;
+class QStyleOptionViewItem;
+class QModelIndex;
+class RegisterView;
+
+// 类型列编辑器委托：仅在进入编辑(双击)时临时创建下拉框，
+// 静止时不驻留控件——避免下拉框吃掉滚轮事件，也减少批量点位的内存与创建开销
+class TypeDelegate : public QStyledItemDelegate
+{
+    Q_OBJECT
+public:
+    TypeDelegate(int area, RegisterView *owner, QObject *parent = 0);
+
+    QWidget *createEditor(QWidget *parent, const QStyleOptionViewItem &option,
+                          const QModelIndex &index) const;
+    void setEditorData(QWidget *editor, const QModelIndex &index) const;
+    void setModelData(QWidget *editor, QAbstractItemModel *model,
+                      const QModelIndex &index) const;
+
+private slots:
+    void commitAndCloseEditor();
+
+private:
+    int           m_area;
+    RegisterView *m_owner;
+};
 
 struct RowData
 {
@@ -26,6 +52,9 @@ class RegisterView : public QWidget
 public:
     explicit RegisterView(QWidget *parent = 0);
 
+    // 类型编辑提交回调（由 TypeDelegate 调用）：更新点位类型并同步读取计划
+    void commitType(int area, int row, DataType tp);
+
 signals:
     // 某区读取计划变化（增删/改类型）
     void planChanged(int areaIndex, QList<RegPlanItem> *items);
@@ -38,7 +67,6 @@ public slots:
 
 private slots:
     void onCustomContextMenu(const QPoint &pos);
-    void onTypeChanged(int index);
     void onNameChanged(QTableWidgetItem *item);
     void onWriteClicked();
     void onTabChanged(int index);
@@ -46,6 +74,8 @@ private slots:
 private:
     void setupTab(int areaIndex);
     int  addRegisters(int areaIndex, int startAddr, int count); // 返回因重复而跳过的数量
+    void fillRow(QTableWidget *t, int areaIndex, int r,
+                 const RowData &rd, const AreaInfo &info);
     void rebuildPlan(int areaIndex);
     int  areaOf(QTableWidget *table) const;
     int  findRow(QTableWidget *table, int protoAddr) const;

@@ -11,6 +11,7 @@
 #include <QHeaderView>
 #include <QVBoxLayout>
 #include <QMessageBox>
+#include <QSet>
 #include <QDebug>
 
 RegisterView::RegisterView(QWidget *parent)
@@ -56,6 +57,7 @@ void RegisterView::setupTab(int areaIndex)
     {
         t->verticalHeader()->setDefaultSectionSize(hdrH + 2);
     }
+    t->setItemDelegateForColumn(ColType, new TypeDelegate(areaIndex, this, t));
 
     connect(t, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(onCustomContextMenu(QPoint)));
     connect(t, SIGNAL(itemChanged(QTableWidgetItem *)),this, SLOT(onNameChanged(QTableWidgetItem *)));
@@ -79,101 +81,126 @@ int RegisterView::addRegisters(int areaIndex, int startAddr, int count)
     QTableWidget *t = m_tables[areaIndex];
     const AreaInfo &info = areaInfo(areaIndex);
     DataType def = (info.readFunc == 1 || info.readFunc == 2) ? TypeBIT : TypeU16;
+    const int base = info.plcBase;
 
-    int base = info.plcBase;
-    int skipped = 0;
-    t->setSortingEnabled(false);
+    // 现有地址集合，O(1) 查重，替代逐项线性查找
+    QSet<int> existing;
+    foreach (const RowData &rd, m_rows[areaIndex])
+        existing.insert(rd.protoAddr);
+
+    // 预生成待添加项：越界忽略，重复地址计入跳过数
+    QList<RowData> adds;
+    int dup = 0;
     for (int i = 0; i < count; ++i)
     {
         int proto = startAddr + i;
         if (proto < 0 || proto > 65535)
             continue;
-        // 快速添加时跳过本区已存在的地址，避免重复点位
-        if (findRow(t, proto) >= 0)
+        if (existing.contains(proto))
         {
-            ++skipped;
+            ++dup;
             continue;
         }
-        int plc = proto + base;
-
         RowData rd;
         rd.name = (areaIndex == 0)
-                  ? QString::number(plc).rightJustified(5, '0')
-                  : QString::number(plc);
-        rd.plcAddr = plc;
+                  ? QString::number(proto + base).rightJustified(5, '0')
+                  : QString::number(proto + base);
+        rd.plcAddr = proto + base;
         rd.protoAddr = proto;
         rd.type = def;
-
-        // 按地址升序找插入位置，m_rows 与表格行同步插入，保持列表始终有序
-        int r = 0;
-        while (r < m_rows[areaIndex].size()
-               && m_rows[areaIndex][r].protoAddr < proto)
-            ++r;
-        m_rows[areaIndex].insert(r, rd);
-        t->insertRow(r);
-
-        QTableWidgetItem *name = new QTableWidgetItem(rd.name);
-        name->setFlags(name->flags() | Qt::ItemIsEditable);
-        t->setItem(r, ColName, name);
-        t->setItem(r, ColAddr, new QTableWidgetItem(formatAddr(proto)));
-        t->setItem(r, ColStatus, new QTableWidgetItem("无效"));
-        t->item(r, ColStatus)->setTextColor(Qt::red);
-        t->setItem(r, ColRaw, new QTableWidgetItem(""));
-        t->setItem(r, ColSet, new QTableWidgetItem(""));
-
-        if (areaIndex == 0 || areaIndex == 1)
-        {
-            // 0区/1区为位类型，固定 BIT，不提供下拉
-            QTableWidgetItem *typeItem = new QTableWidgetItem("bit");
-            typeItem->setFlags(typeItem->flags() & ~Qt::ItemIsEditable);
-            typeItem->setTextAlignment(Qt::AlignCenter);
-            t->setItem(r, ColType, typeItem);
-        }
-        else
-        {
-            // 3区/4区支持 uint16 / int16 选择
-            QComboBox *typeCombo = new QComboBox(t);
-            typeCombo->addItems(QStringList() << "uint16" << "int16");
-            typeCombo->setCurrentIndex(def == TypeS16 ? 1 : 0);
-            typeCombo->setProperty("area", areaIndex);
-            typeCombo->setProperty("row", r);
-            // 去掉组合框与下拉箭头按钮的 3D 边框，融入表格
-            typeCombo->setStyleSheet(
-                "QComboBox { border: none; background: transparent; }"
-                "QComboBox::drop-down { border: none; background: transparent; }"
-            );
-            t->setCellWidget(r, ColType, typeCombo);
-            connect(typeCombo, SIGNAL(currentIndexChanged(int)),
-                    this, SLOT(onTypeChanged(int)));
-        }
-
-        QPushButton *wbtn = new QPushButton("写入", t);
-        wbtn->setProperty("area", areaIndex);
-        wbtn->setProperty("row", r);
-        wbtn->setFlat(true);
-        t->setCellWidget(r, ColWrite, wbtn);
-        connect(wbtn, SIGNAL(clicked()), this, SLOT(onWriteClicked()));
-
-        // 不可写区域：设定值不可编辑，写入按钮禁用
-        if (!info.writable)
-        {
-            QTableWidgetItem *set = t->item(r, ColSet);
-            set->setText("N/A");
-            set->setFlags(set->flags() & ~Qt::ItemIsEditable);
-            wbtn->setEnabled(false);
-        }
+        adds.append(rd);
     }
-    // 中间插入使后续行号整体后移，统一复位行内控件的行号属性
-    for (int r = 0; r < t->rowCount(); ++r)
+    if (adds.isEmpty())
     {
-        QComboBox *c = qobject_cast<QComboBox *>(t->cellWidget(r, ColType));
-        if (c) c->setProperty("row", r);
-        QPushButton *b = qobject_cast<QPushButton *>(t->cellWidget(r, ColWrite));
-        if (b) b->setProperty("row", r);
+        rebuildPlan(areaIndex);
+        return dup;
     }
-    t->setSortingEnabled(false);
+
+    // 批量插入期间暂停重绘，避免逐行刷新导致长时间无响应
+    t->setUpdatesEnabled(false);
+    t->viewport()->setUpdatesEnabled(false);
+
+    const int oldCount = m_rows[areaIndex].size();
+    if (oldCount == 0 || adds.first().protoAddr >= m_rows[areaIndex].last().protoAddr)
+    {
+        // 常见路径：新地址全部追加在尾部，一次性扩展行数后逐个填充新增行
+        m_rows[areaIndex] += adds;
+        t->setRowCount(oldCount + adds.size());
+        for (int k = 0; k < adds.size(); ++k)
+            fillRow(t, areaIndex, oldCount + k, adds[k], info);
+    }
+    else
+    {
+        // 中间插入：按升序逐项找位；末尾统一复位所有行的行号属性
+        int pos = 0;
+        for (int k = 0; k < adds.size(); ++k)
+        {
+            while (pos < m_rows[areaIndex].size()
+                   && m_rows[areaIndex][pos].protoAddr < adds[k].protoAddr)
+                ++pos;
+            m_rows[areaIndex].insert(pos, adds[k]);
+            t->insertRow(pos);
+            fillRow(t, areaIndex, pos, adds[k], info);
+            ++pos;
+        }
+        for (int r = 0; r < t->rowCount(); ++r)
+        {
+            QPushButton *b = qobject_cast<QPushButton *>(t->cellWidget(r, ColWrite));
+            if (b) b->setProperty("row", r);
+        }
+    }
+
+    t->setUpdatesEnabled(true);
+    t->viewport()->setUpdatesEnabled(true);
+
     rebuildPlan(areaIndex);
-    return skipped;
+    return dup;
+}
+
+// 填充一行单元格与行内控件（类型下拉 / 写入按钮）
+void RegisterView::fillRow(QTableWidget *t, int areaIndex, int r,
+                           const RowData &rd, const AreaInfo &info)
+{
+    QTableWidgetItem *name = new QTableWidgetItem(rd.name);
+    name->setFlags(name->flags() | Qt::ItemIsEditable);
+    t->setItem(r, ColName, name);
+    t->setItem(r, ColAddr, new QTableWidgetItem(formatAddr(rd.protoAddr)));
+    t->setItem(r, ColStatus, new QTableWidgetItem("无效"));
+    t->item(r, ColStatus)->setTextColor(Qt::red);
+    t->setItem(r, ColRaw, new QTableWidgetItem(""));
+    t->setItem(r, ColSet, new QTableWidgetItem(""));
+
+    if (areaIndex == 0 || areaIndex == 1)
+    {
+        // 0区/1区为位类型，固定 BIT，不可编辑
+        QTableWidgetItem *typeItem = new QTableWidgetItem("bit");
+        typeItem->setFlags(typeItem->flags() & ~Qt::ItemIsEditable);
+        typeItem->setTextAlignment(Qt::AlignCenter);
+        t->setItem(r, ColType, typeItem);
+    }
+    else
+    {
+        // 3区/4区支持 uint16 / int16 选择：双击进入编辑，由 TypeDelegate 弹出下拉框
+        QTableWidgetItem *typeItem = new QTableWidgetItem(rd.type == TypeS16 ? "s16" : "u16");
+        typeItem->setTextAlignment(Qt::AlignCenter);
+        t->setItem(r, ColType, typeItem);
+    }
+
+    QPushButton *wbtn = new QPushButton("写入", t);
+    wbtn->setProperty("area", areaIndex);
+    wbtn->setProperty("row", r);
+    wbtn->setFlat(true);
+    t->setCellWidget(r, ColWrite, wbtn);
+    connect(wbtn, SIGNAL(clicked()), this, SLOT(onWriteClicked()));
+
+    // 不可写区域：设定值不可编辑，写入按钮禁用
+    if (!info.writable)
+    {
+        QTableWidgetItem *set = t->item(r, ColSet);
+        set->setText("-");
+        set->setFlags(set->flags() & ~Qt::ItemIsEditable);
+        wbtn->setEnabled(false);
+    }
 }
 
 void RegisterView::rebuildPlan(int areaIndex)
@@ -189,20 +216,61 @@ void RegisterView::rebuildPlan(int areaIndex)
     emit planChanged(areaIndex, items);
 }
 
-void RegisterView::onTypeChanged(int /*index*/)
+// 类型编辑提交回调（由 TypeDelegate 在 setModelData 中调用）
+void RegisterView::commitType(int area, int row, DataType tp)
 {
-    QComboBox *combo = qobject_cast<QComboBox *>(sender());
-    if (!combo) return;
-    // 注意: setCellWidget 会把控件重设父对象为 viewport，
-    // 不能靠 parent() 反查表格，改用创建时写入的动态属性
-    int area = combo->property("area").toInt();
-    int row = combo->property("row").toInt();
     if (area < 0 || area > 3 || row < 0 || row >= m_rows[area].size()) return;
-
-    QString txt = combo->currentText();
-    DataType tp = (txt == "int16") ? TypeS16 : TypeU16;
     m_rows[area][row].type = tp;
     rebuildPlan(area);
+}
+
+// ---------- TypeDelegate ----------
+
+TypeDelegate::TypeDelegate(int area, RegisterView *owner, QObject *parent)
+    : QStyledItemDelegate(parent), m_area(area), m_owner(owner)
+{
+}
+
+QWidget *TypeDelegate::createEditor(QWidget *parent,
+                                    const QStyleOptionViewItem &/*option*/,
+                                    const QModelIndex &/*index*/) const
+{
+    QComboBox *cb = new QComboBox(parent);
+    cb->addItems(QStringList() << "u16" << "s16");
+    // 选中即提交并关闭编辑器
+    connect(cb, SIGNAL(currentIndexChanged(int)), this, SLOT(commitAndCloseEditor()));
+    return cb;
+}
+
+void TypeDelegate::setEditorData(QWidget *editor, const QModelIndex &index) const
+{
+    QComboBox *cb = qobject_cast<QComboBox *>(editor);
+    if (!cb) return;
+    QString val = index.model()->data(index, Qt::EditRole).toString();
+    int i = cb->findText(val);
+    // 屏蔽信号，避免初始化选项时误触发提交关闭
+    cb->blockSignals(true);
+    cb->setCurrentIndex(qMax(0, i));
+    cb->blockSignals(false);
+}
+
+void TypeDelegate::setModelData(QWidget *editor, QAbstractItemModel *model,
+                                const QModelIndex &index) const
+{
+    QComboBox *cb = qobject_cast<QComboBox *>(editor);
+    if (!cb) return;
+    QString txt = cb->currentText();
+    model->setData(index, txt, Qt::EditRole);
+    DataType tp = (txt == "s16") ? TypeS16 : TypeU16;
+    m_owner->commitType(m_area, index.row(), tp);
+}
+
+void TypeDelegate::commitAndCloseEditor()
+{
+    QComboBox *editor = qobject_cast<QComboBox *>(sender());
+    if (!editor) return;
+    commitData(editor);
+    closeEditor(editor);
 }
 
 void RegisterView::onNameChanged(QTableWidgetItem *item)
