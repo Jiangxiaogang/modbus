@@ -45,7 +45,7 @@ private slots:
 
 private:
     void setupTab(int areaIndex);
-    void addRegisters(int areaIndex, int startPlc, int count);
+    void addRegisters(int areaIndex, int startAddr, int count);
     void rebuildPlan(int areaIndex);
     int  areaOf(QTableWidget *table) const;
     int  findRow(QTableWidget *table, int protoAddr) const;

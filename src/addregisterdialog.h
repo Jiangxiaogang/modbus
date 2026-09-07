@@ -3,13 +3,13 @@
 
 #include <QDialog>
 
-// 快速添加寄存器：输入起始 PLC 地址与数量
+// 快速添加寄存器：输入起始地址与数量
 class AddRegisterDialog : public QDialog
 {
     Q_OBJECT
 public:
     AddRegisterDialog(int areaIndex, QWidget *parent = 0);
-    int startPlc() const;   // 起始 PLC 地址 (如 40001)
+    int startAddr() const;  // 起始地址 (0-65535)
     int count() const;      // 数量
 
 private slots:
@@ -17,7 +17,7 @@ private slots:
 
 private:
     int m_areaIndex;
-    class QLineEdit   *m_addrEdit;
+    class QSpinBox    *m_addrSpin;
     class QSpinBox    *m_countSpin;
     class QPushButton *m_okBtn;
 };

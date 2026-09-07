@@ -5,7 +5,12 @@
 #include <QMap>
 
 ModbusWorker::ModbusWorker(QObject *parent)
-    : QObject(parent), m_client(0), m_timer(0), m_tx(0), m_rx(0), m_errCount(0)
+    : QObject(parent)
+    , m_client(0)
+    , m_timer(0)
+    , m_tx(0)
+    , m_rx(0)
+    , m_errCount(0)
 {
 }
 
@@ -99,8 +104,7 @@ void ModbusWorker::runReadArea(int areaIndex, const QList<RegPlanItem> &items)
 {
     const AreaInfo &info = areaInfo(areaIndex);
     int maxQ = (info.readFunc == 1 || info.readFunc == 2) ? 2000 : 125;
-    int q = qMin(m_cfg.readQuantity, maxQ);
-    if (q < 1) q = 1;
+    int q = m_cfg.readMode ? maxQ : 1;
 
     int minA = items.first().address;
     int maxA = items.first().address;

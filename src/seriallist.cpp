@@ -1,4 +1,3 @@
-
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -30,8 +29,7 @@ QStringList SerialList::getSerialPorts()
     }
     if (ports.isEmpty())
     {
-        for (int i = 1; i <= 20; ++i)
-            ports.append(QString("COM%1").arg(i));
+        ports.append(QString("COM1"));
     }
     return ports;
 }

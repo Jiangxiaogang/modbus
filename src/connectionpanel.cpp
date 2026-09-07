@@ -178,7 +178,7 @@ void ConnectionPanel::buildConfig()
     m_config.slave           = m_slaveSpin->value();
     m_config.responseTimeout = m_timeoutSpin->value();
     m_config.pollInterval    = m_pollSpin->value();
-    m_config.readQuantity    = m_readModeCombo->currentIndex();
+    m_config.readMode        = m_readModeCombo->currentIndex();
     m_config.coilWriteFunc   = m_coilFuncCombo->currentText().toInt();
     m_config.regWriteFunc    = m_regFuncCombo->currentText().toInt();
 }

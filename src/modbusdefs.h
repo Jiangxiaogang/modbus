@@ -92,7 +92,6 @@ struct ModbusConfig
     int     responseTimeout;  // 响应超时 ms
     int     pollInterval;     // 轮询间隔 ms
     int     readMode;         // 读取模式 0=单点模式/1=批量模式
-    int     readQuantity;
     int     coilWriteFunc;    // 遥控功能码 5 / 15
     int     regWriteFunc;     // 遥调功能码 6 / 16
 };

@@ -74,7 +74,7 @@ int RegisterView::areaOf(QTableWidget *table) const
     return -1;
 }
 
-void RegisterView::addRegisters(int areaIndex, int startPlc, int count)
+void RegisterView::addRegisters(int areaIndex, int startAddr, int count)
 {
     QTableWidget *t = m_tables[areaIndex];
     const AreaInfo &info = areaInfo(areaIndex);
@@ -84,10 +84,10 @@ void RegisterView::addRegisters(int areaIndex, int startPlc, int count)
     t->setSortingEnabled(false);
     for (int i = 0; i < count; ++i)
     {
-        int plc = startPlc + i;
-        if (plc < base || plc > base + 9998)
+        int proto = startAddr + i;
+        if (proto < 0 || proto > 65535)
             continue;
-        int proto = plc - base;
+        int plc = proto + base;
 
         RowData rd;
         // 0区(遥控) PLC 地址为 00001-09999，名称补前导 0 至 5 位保持对齐
@@ -274,7 +274,7 @@ void RegisterView::onQuickAddInArea(int area)
 {
     AddRegisterDialog dlg(area, this);
     if (dlg.exec() == QDialog::Accepted)
-        addRegisters(area, dlg.startPlc(), dlg.count());
+        addRegisters(area, dlg.startAddr(), dlg.count());
 }
 
 void RegisterView::onDeleteRowsInArea(int area, QTableWidget *t)
