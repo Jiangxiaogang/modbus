@@ -1,5 +1,7 @@
 #include <winver.h>
 
+IDI_ICON1 ICON DISCARDABLE "app.ico"
+
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION 1,0,0,1
  PRODUCTVERSION 1,0,0,1
@@ -14,7 +16,7 @@ BEGIN
         BLOCK "080404b0"
         BEGIN
             VALUE "CompanyName", "ModbusTool"
-            VALUE "FileDescription", "Modbus 调试工具"
+            VALUE "FileDescription", "Modbus Tool"
             VALUE "FileVersion", "1.0.0.1"
             VALUE "ProductName", "ModbusTool"
             VALUE "ProductVersion", "1.0.0.1"

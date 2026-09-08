@@ -5,7 +5,7 @@
 // 修改版本号只需调整这四个数字，版本字符串自动生成
 #define APP_VERSION_MAJOR  1
 #define APP_VERSION_MINOR  0
-#define APP_VERSION_PATCH  0
+#define APP_VERSION_PATCH  1
 #define APP_VERSION_BUILD  0
 
 #define APP_VER_STR_(x) #x
