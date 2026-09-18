@@ -17,7 +17,7 @@ private slots:
 
 private:
     int m_areaIndex;
-    class QSpinBox    *m_addrSpin;
+    class QLineEdit   *m_addrEdit;
     class QSpinBox    *m_countSpin;
     class QPushButton *m_okBtn;
 };
