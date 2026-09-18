@@ -105,7 +105,7 @@ struct ModbusConfig
     int     baudRate;
     int     dataBits;
     int     stopBits;
-    int     parity;      // 'N' 'E' 'O'
+    int     parity;      // 0=无 1=奇 2=偶
 
     // 网络
     NetworkType netType;

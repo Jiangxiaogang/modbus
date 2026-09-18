@@ -8,7 +8,7 @@
 class SerialTransport : public ITransport
 {
 public:
-    SerialTransport(const QString &portName, int baudRate, int dataBits, int stopBits, char parity);
+    SerialTransport(const QString &portName, int baudRate, int dataBits, int stopBits, int parity);
     ~SerialTransport();
 
     bool open();
@@ -23,7 +23,7 @@ private:
     int     m_baudRate;
     int     m_dataBits;
     int     m_stopBits;
-    char    m_parity;
+    int     m_parity;
     void   *m_handle;   // HANDLE
     QString m_err;
 };

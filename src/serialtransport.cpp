@@ -9,7 +9,7 @@
 #include <windows.h>
 
 SerialTransport::SerialTransport(const QString &portName, int baudRate,
-                                 int dataBits, int stopBits, char parity)
+                                 int dataBits, int stopBits, int parity)
     : m_portName(portName), m_baudRate(baudRate), m_dataBits(dataBits)
     , m_stopBits(stopBits), m_parity(parity), m_handle(INVALID_HANDLE_VALUE)
 {
@@ -54,23 +54,15 @@ bool SerialTransport::open()
     }
     switch (m_parity)
     {
-    case 'E':
-        dcb.Parity = EVENPARITY;
-        dcb.fParity = TRUE;
-        break;
-    case 'O':
+    case 1:  // 奇校验
         dcb.Parity = ODDPARITY;
         dcb.fParity = TRUE;
         break;
-    case 'M':
-        dcb.Parity = MARKPARITY;
+    case 2:  // 偶校验
+        dcb.Parity = EVENPARITY;
         dcb.fParity = TRUE;
         break;
-    case 'S':
-        dcb.Parity = SPACEPARITY;
-        dcb.fParity = TRUE;
-        break;
-    default:
+    default: // 0 无校验
         dcb.Parity = NOPARITY;
         dcb.fParity = FALSE;
         break;
@@ -88,7 +80,7 @@ bool SerialTransport::open()
 
     // 3.5 字符时间间隔（用于 RTU/ASCII 帧边界检测）
     double charBits = 11.0; // 8N1
-    if (m_parity != 'N') charBits = 12.0;
+    if (m_parity != 0) charBits = 12.0;
     double charMs = (charBits * 1000.0) / (double)m_baudRate;
     DWORD interval = (DWORD)(charMs * 3.5);
     if (interval < 1) interval = 1;
@@ -132,7 +124,7 @@ qint64 SerialTransport::write(const char *data, qint64 len)
         return -1;
     }
     // RTU 发送后等待 3.5 字符时间，保证帧间隔
-    double charBits = (m_parity == 'N') ? 11.0 : 12.0;
+    double charBits = (m_parity == 0) ? 11.0 : 12.0;
     int ms = (int)(charBits * 1000.0 / (double)m_baudRate * 3.5) + 1;
     Sleep(ms);
     return (qint64)written;
@@ -147,7 +139,7 @@ QByteArray SerialTransport::read(int timeoutMs)
 
     COMMTIMEOUTS ct;
     memset(&ct, 0, sizeof(ct));
-    double charBits = (m_parity == 'N') ? 11.0 : 12.0;
+    double charBits = (m_parity == 0) ? 11.0 : 12.0;
     double charMs = (charBits * 1000.0) / (double)m_baudRate;
     DWORD interval = (DWORD)(charMs * 3.5);
     if (interval < 1) interval = 1;
