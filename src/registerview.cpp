@@ -69,6 +69,7 @@ void RegisterView::setupTab(int areaIndex)
 
     connect(t, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(onCustomContextMenu(QPoint)));
     connect(t, SIGNAL(itemChanged(QTableWidgetItem *)),this, SLOT(onNameChanged(QTableWidgetItem *)));
+    connect(t, SIGNAL(itemDoubleClicked(QTableWidgetItem *)),this, SLOT(onItemDoubleClicked(QTableWidgetItem *)));
     m_tables[areaIndex] = t;
 }
 
@@ -305,11 +306,22 @@ void RegisterView::onWriteClicked()
     RowData &rd = m_rows[area][row];
     QTableWidgetItem *setItem = t->item(row, ColSet);
     if (!setItem) return;
+    QString txt = setItem->text().trimmed();
+    if (txt.isEmpty())
+    {
+        QMessageBox::warning(this, "写入失败",
+            QString("%1 地址 %2 的设定值为空，请输入要写入的数值。")
+                .arg(areaInfo(area).name).arg(formatAddr(rd.protoAddr)));
+        return;
+    }
     bool ok = false;
-    qint64 val = setItem->text().toLongLong(&ok);
+    qint64 val = txt.toLongLong(&ok);
     if (!ok)
     {
         btn->setText("错误");
+        QMessageBox::warning(this, "写入失败",
+            QString("%1 地址 %2 的设定值 \"%3\" 不是有效的数值。")
+                .arg(areaInfo(area).name).arg(formatAddr(rd.protoAddr)).arg(txt));
         return;
     }
     btn->setText("写入");
@@ -383,6 +395,17 @@ void RegisterView::onWriteResult(int areaIndex, int protoAddr, bool ok, const QS
                 .arg(formatAddr(protoAddr))
                 .arg(msg.isEmpty() ? QString("未知错误") : msg));
     }
+}
+
+// 双击进入设定值编辑态时，将写入按钮文本还原为“写入”
+void RegisterView::onItemDoubleClicked(QTableWidgetItem *item)
+{
+    if (!item || item->column() != ColSet) return;
+    QTableWidget *t = item->tableWidget();
+    if (!t) return;
+    QPushButton *btn = qobject_cast<QPushButton *>(t->cellWidget(item->row(), ColWrite));
+    if (btn)
+        btn->setText("写入");
 }
 
 int RegisterView::findRow(QTableWidget *table, int protoAddr) const

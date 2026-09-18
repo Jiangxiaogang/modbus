@@ -44,7 +44,7 @@ MainWindow::MainWindow(QWidget *parent)
     setCentralWidget(vsplit);
 
     // 状态栏
-    m_lblConn = new QLabel("未连接", this);
+    m_lblConn = new QLabel("设备未连接", this);
     m_lblStats = new QLabel("TX:0  RX:0  ERR:0", this);
     statusBar()->addWidget(m_lblConn, 1);
     statusBar()->addPermanentWidget(m_lblStats);
@@ -95,8 +95,22 @@ MainWindow::MainWindow(QWidget *parent)
 void MainWindow::onConnectionState(bool connected)
 {
     m_panel->setConnected(connected);
-    m_lblConn->setText(connected ? "已连接" : "未连接");
-    m_lblConn->setStyleSheet(connected? "QLabel{color:#0a0;}": "QLabel{color:#a00;}");
+    if (connected)
+    {
+        const ModbusConfig &cfg = m_panel->getConfig();
+        QString endpoint;
+        if (cfg.channel == ChannelSerial)
+            endpoint = cfg.portName;
+        else
+            endpoint = QString("%1:%2").arg(cfg.netAddr).arg(cfg.netPort);
+        m_lblConn->setText(QString("设备已连接(%1)").arg(endpoint));
+        m_lblConn->setStyleSheet("QLabel{color:#0a;}");
+    }
+    else
+    {
+        m_lblConn->setText("设备未连接");
+        m_lblConn->setStyleSheet("QLabel{color:#a00;}");
+    }
 }
 
 void MainWindow::onConnectError(const QString &msg)

@@ -68,6 +68,7 @@ public slots:
 private slots:
     void onCustomContextMenu(const QPoint &pos);
     void onNameChanged(QTableWidgetItem *item);
+    void onItemDoubleClicked(QTableWidgetItem *item);
     void onWriteClicked();
     void onTabChanged(int index);
 
