@@ -151,6 +151,15 @@ ConnectionPanel::ConnectionPanel(QWidget *parent)
     // 信号连接
     connect(m_connCombo, SIGNAL(currentIndexChanged(int)), this, SLOT(onConnChanged(int)));
     connect(m_connectBtn, SIGNAL(clicked()), this, SLOT(onConnectButton()));
+
+    // 协议/轮询层：连接后改动即时下发（由 m_connected 守卫）
+    connect(m_protoCombo, SIGNAL(currentIndexChanged(int)), this, SLOT(onProtocolChanged()));
+    connect(m_readModeCombo, SIGNAL(currentIndexChanged(int)), this, SLOT(onProtocolChanged()));
+    connect(m_coilFuncCombo, SIGNAL(currentIndexChanged(int)), this, SLOT(onProtocolChanged()));
+    connect(m_regFuncCombo, SIGNAL(currentIndexChanged(int)), this, SLOT(onProtocolChanged()));
+    connect(m_slaveSpin, SIGNAL(valueChanged(int)), this, SLOT(onProtocolChanged()));
+    connect(m_timeoutSpin, SIGNAL(valueChanged(int)), this, SLOT(onProtocolChanged()));
+    connect(m_pollSpin, SIGNAL(valueChanged(int)), this, SLOT(onProtocolChanged()));
 }
 
 void ConnectionPanel::refreshSerialPorts()
@@ -185,7 +194,7 @@ void ConnectionPanel::buildConfig()
     m_config.regWriteFunc    = m_regFuncCombo->currentText().toInt();
 }
 
-void ConnectionPanel::setWidgetEnabled(bool enabled)
+void ConnectionPanel::setTransportEnabled(bool enabled)
 {
     m_connCombo->setEnabled(enabled);
     m_serPortCombo->setEnabled(enabled);
@@ -195,7 +204,10 @@ void ConnectionPanel::setWidgetEnabled(bool enabled)
     m_netTypeCombo->setEnabled(enabled);
     m_netAddrEdit->setEnabled(enabled);
     m_netPortSpin->setEnabled(enabled);
+}
 
+void ConnectionPanel::setProtocolEnabled(bool enabled)
+{
     m_protoCombo->setEnabled(enabled);
     m_slaveSpin->setEnabled(enabled);
     m_timeoutSpin->setEnabled(enabled);
@@ -203,6 +215,12 @@ void ConnectionPanel::setWidgetEnabled(bool enabled)
     m_readModeCombo->setEnabled(enabled);
     m_coilFuncCombo->setEnabled(enabled);
     m_regFuncCombo->setEnabled(enabled);
+}
+
+void ConnectionPanel::setWidgetEnabled(bool enabled)
+{
+    setTransportEnabled(enabled);
+    setProtocolEnabled(enabled);
 }
 
 void ConnectionPanel::onConnChanged(int idx)
@@ -230,7 +248,17 @@ void ConnectionPanel::onConnectButton()
 void ConnectionPanel::setConnected(bool connected)
 {
     m_connected = connected;
-    setWidgetEnabled(!connected);
+    // 传输层参数连接期间锁定；协议/轮询层始终可改，改动即时生效
+    setTransportEnabled(!connected);
+    setProtocolEnabled(true);
     m_connectBtn->setText(connected ? "断开" : "连接");
     m_connectBtn->setEnabled(true);
+}
+
+void ConnectionPanel::onProtocolChanged()
+{
+    if (!m_connected)
+        return;
+    buildConfig();
+    emit configChanged(m_config);
 }

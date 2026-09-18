@@ -21,6 +21,7 @@ public:
 signals:
     void connectClicked(ModbusConfig *config);
     void disconnectClicked();
+    void configChanged(const ModbusConfig &config);
 
 public slots:
     void setConnected(bool connected);
@@ -28,11 +29,14 @@ public slots:
 private slots:
     void onConnChanged(int idx);
     void onConnectButton();
+    void onProtocolChanged();
 
 private:
     void refreshSerialPorts();
     void buildConfig();
     void setWidgetEnabled(bool enabled);
+    void setTransportEnabled(bool enabled);
+    void setProtocolEnabled(bool enabled);
     bool         m_connected;
     ModbusConfig m_config;
 

@@ -14,6 +14,8 @@ public:
     ~ModbusClient();
 
     bool open(const ModbusConfig &cfg);
+    // 热更新协议层参数(协议/从站/超时)，不重建传输层
+    void setConfig(const ModbusConfig &cfg);
     void close();
     bool isOpen() const;
     QString errorString() const;

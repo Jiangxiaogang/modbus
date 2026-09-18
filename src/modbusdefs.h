@@ -120,6 +120,8 @@ struct ModbusConfig
     int     coilWriteFunc;    // 遥控功能码 5 / 15
     int     regWriteFunc;     // 遥调功能码 6 / 16
 };
+// 供跨线程 QueuedConnection 值传递连接配置（QObject::connect 排队参数要求已注册）
+Q_DECLARE_METATYPE(ModbusConfig)
 
 // CRC16 (Modbus)
 quint16 modbusCrc(const char *data, int len);

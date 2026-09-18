@@ -12,6 +12,8 @@ int main(int argc, char *argv[])
 
     // writeRequested(int,int,DataType,qint64) 为跨线程排队连接，须注册枚举类型
     qRegisterMetaType<DataType>("DataType");
+    // configChanged(ModbusConfig) 为跨线程排队连接，须注册结构体类型
+    qRegisterMetaType<ModbusConfig>("ModbusConfig");
 
     MainWindow w;
     w.show();

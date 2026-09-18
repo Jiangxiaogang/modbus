@@ -68,6 +68,8 @@ MainWindow::MainWindow(QWidget *parent)
     // 面板 -> 工作线程
     connect(m_panel, SIGNAL(connectClicked(ModbusConfig*)), m_worker, SLOT(connectDevice(ModbusConfig*)));
     connect(m_panel, SIGNAL(disconnectClicked()), m_worker, SLOT(disconnectDevice()));
+    // 连接后协议/轮询层改动：值传递排队到工作线程热更新
+    connect(m_panel, SIGNAL(configChanged(ModbusConfig)), m_worker, SLOT(applyConfig(ModbusConfig)));
 
     // 数据区 -> 工作线程
     connect(m_view, SIGNAL(planChanged(int, QList<RegPlanItem>*)), m_worker, SLOT(setAreaPlan(int, QList<RegPlanItem>*)));

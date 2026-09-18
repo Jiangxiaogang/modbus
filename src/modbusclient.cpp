@@ -40,6 +40,11 @@ bool ModbusClient::open(const ModbusConfig &cfg)
     return true;
 }
 
+void ModbusClient::setConfig(const ModbusConfig &cfg)
+{
+    m_cfg = cfg;
+}
+
 void ModbusClient::close()
 {
     if (m_transport)

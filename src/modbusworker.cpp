@@ -35,6 +35,26 @@ void ModbusWorker::setConfig(const ModbusConfig &cfg)
         m_timer->setInterval(qMax(50, m_cfg.pollInterval));
 }
 
+void ModbusWorker::applyConfig(const ModbusConfig &cfg)
+{
+    QMutexLocker lock(&m_mutex);
+    // 仅热更新协议层与轮询层；传输层参数在连接期间不变
+    m_cfg.protocol        = cfg.protocol;
+    m_cfg.slave           = cfg.slave;
+    m_cfg.responseTimeout = cfg.responseTimeout;
+    m_cfg.pollInterval    = cfg.pollInterval;
+    m_cfg.readMode        = cfg.readMode;
+    m_cfg.coilWriteFunc   = cfg.coilWriteFunc;
+    m_cfg.regWriteFunc    = cfg.regWriteFunc;
+
+    if (m_client)
+        m_client->setConfig(m_cfg);
+    if (m_timer)
+        m_timer->setInterval(qMax(50, m_cfg.pollInterval));
+    if (m_client)
+        emit logInfo(QTime::currentTime().toString("hh:mm:ss.zzz"), "协议配置已更新");
+}
+
 void ModbusWorker::connectDevice(ModbusConfig *cfg)
 {
     QMutexLocker lock(&m_mutex);
