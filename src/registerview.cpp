@@ -35,11 +35,9 @@ RegisterView::RegisterView(QWidget *parent)
     m_tabs = new QTabWidget(this);
     v->addWidget(m_tabs);
 
-    // 显示顺序：DO/DI/AO/AI，即交换 3区 与 4区 的 TAB 位置
-    static const int tabOrder[4] = { 0, 1, 3, 2 };
-    for (int i = 0; i < 4; ++i)
+    // TAB 顺序由 areaInfo() 的数组顺序决定：DO/DI/AO/AI
+    for (int a = 0; a < 4; ++a)
     {
-        int a = tabOrder[i];
         setupTab(a);
         m_tabs->addTab(m_tables[a], areaInfo(a).name);
     }
@@ -318,7 +316,7 @@ void RegisterView::onWriteClicked()
     if (txt.isEmpty())
     {
         QMessageBox::warning(this, "写入失败",
-            QString("%1 地址 %2 的设定值为空，请输入要写入的数值。")
+            QString("%1 地址 %2\n设定值为空，请输入要写入的数值。")
                 .arg(areaInfo(area).name).arg(addrText(rd.protoAddr)));
         return;
     }
@@ -332,7 +330,7 @@ void RegisterView::onWriteClicked()
     {
         btn->setText("错误");
         QMessageBox::warning(this, "写入失败",
-            QString("%1 地址 %2 的设定值 \"%3\" 不是有效的数值。")
+            QString("%1 地址 %2\n设定值 \"%3\" 不是有效的数值。")
                 .arg(areaInfo(area).name).arg(addrText(rd.protoAddr)).arg(txt));
         return;
     }
@@ -398,11 +396,11 @@ void RegisterView::onWriteResult(int areaIndex, int protoAddr, bool ok, const QS
     if (btn)
         btn->setText(ok ? "成功" : "失败");
 
-    // 遥控(0区)/遥调(4区)写入失败时弹框提示失败原因
-    if (!ok && (areaIndex == 0 || areaIndex == 3))
+    // 可写区(DO/AO)写入失败时弹框提示失败原因
+    if (!ok && areaInfo(areaIndex).writable)
     {
         QMessageBox::warning(this, "写入失败",
-            QString("%1 地址 %2 写入失败：%3")
+            QString("%1 地址 %2\n原因：%3")
                 .arg(areaInfo(areaIndex).name)
                 .arg(addrText(protoAddr))
                 .arg(msg.isEmpty() ? QString("未知错误") : msg));
