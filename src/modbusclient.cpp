@@ -75,7 +75,7 @@ bool ModbusClient::transact(quint8 func, const QByteArray &txPdu,
     if (modbusErr) *modbusErr = 0;
     if (!isOpen())
     {
-        err = "未连接";
+        err = "设备未连接";
         return false;
     }
 
@@ -93,7 +93,7 @@ bool ModbusClient::transact(quint8 func, const QByteArray &txPdu,
     QByteArray rx = m_transport->read(m_cfg.responseTimeout);
     if (rx.isEmpty())
     {
-        err = "响应超时";
+        err = "设备响应超时";
         return false;
     }
     if (rxBytes) *rxBytes = rx.size();
