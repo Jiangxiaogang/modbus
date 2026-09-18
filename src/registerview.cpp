@@ -14,6 +14,14 @@
 #include <QSet>
 #include <QDebug>
 
+// 只读单元格项：去掉可编辑标志，禁止双击进入编辑
+static QTableWidgetItem *makeReadOnlyItem(const QString &text)
+{
+    QTableWidgetItem *it = new QTableWidgetItem(text);
+    it->setFlags(it->flags() & ~Qt::ItemIsEditable);
+    return it;
+}
+
 RegisterView::RegisterView(QWidget *parent)
     : QWidget(parent)
 {
@@ -164,10 +172,10 @@ void RegisterView::fillRow(QTableWidget *t, int areaIndex, int r,
     QTableWidgetItem *name = new QTableWidgetItem(rd.name);
     name->setFlags(name->flags() | Qt::ItemIsEditable);
     t->setItem(r, ColName, name);
-    t->setItem(r, ColAddr, new QTableWidgetItem(formatAddr(rd.protoAddr)));
-    t->setItem(r, ColStatus, new QTableWidgetItem("无效"));
+    t->setItem(r, ColAddr, makeReadOnlyItem(formatAddr(rd.protoAddr)));
+    t->setItem(r, ColStatus, makeReadOnlyItem("无效"));
     t->item(r, ColStatus)->setTextColor(Qt::red);
-    t->setItem(r, ColRaw, new QTableWidgetItem(""));
+    t->setItem(r, ColRaw, makeReadOnlyItem(""));
     t->setItem(r, ColSet, new QTableWidgetItem(""));
 
     if (areaIndex == 0 || areaIndex == 1)
@@ -365,7 +373,16 @@ void RegisterView::onWriteResult(int areaIndex, int protoAddr, bool ok, const QS
     QPushButton *btn = qobject_cast<QPushButton *>(t->cellWidget(row, ColWrite));
     if (btn)
         btn->setText(ok ? "成功" : "失败");
-    Q_UNUSED(msg);
+
+    // 遥控(0区)/遥调(4区)写入失败时弹框提示失败原因
+    if (!ok && (areaIndex == 0 || areaIndex == 3))
+    {
+        QMessageBox::warning(this, "写入失败",
+            QString("%1 地址 %2 写入失败：%3")
+                .arg(areaInfo(areaIndex).name)
+                .arg(formatAddr(protoAddr))
+                .arg(msg.isEmpty() ? QString("未知错误") : msg));
+    }
 }
 
 int RegisterView::findRow(QTableWidget *table, int protoAddr) const
