@@ -63,6 +63,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     // 实时数据对象（中转站），位于 GUI 线程
     m_data = new RealtimeData(this);
+    m_view->setRealtimeData(m_data);
 
     // 面板 -> 工作线程
     connect(m_panel, SIGNAL(connectClicked(ModbusConfig*)), m_worker, SLOT(connectDevice(ModbusConfig*)));

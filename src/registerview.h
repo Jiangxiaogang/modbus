@@ -12,6 +12,7 @@ class QTableWidgetItem;
 class QStyleOptionViewItem;
 class QModelIndex;
 class RegisterView;
+class RealtimeData;
 
 // 类型列编辑器委托：仅在进入编辑(双击)时临时创建下拉框，
 // 静止时不驻留控件——避免下拉框吃掉滚轮事件，也减少批量点位的内存与创建开销
@@ -55,6 +56,9 @@ public:
     // 类型编辑提交回调（由 TypeDelegate 调用）：更新点位类型并同步读取计划
     void commitType(int area, int row, DataType tp);
 
+    // 绑定实时数据中转站，供切换数值格式时重新渲染原始值
+    void setRealtimeData(RealtimeData *data);
+
 signals:
     // 某区读取计划变化（增删/改类型）
     void planChanged(int areaIndex, QList<RegPlanItem> *items);
@@ -83,6 +87,10 @@ private:
     void onQuickAddInArea(int area);
     void onDeleteRowsInArea(int area, QTableWidget *t);
     void onClearArea(int area, QTableWidget *t);
+    QString addrText(int protoAddr) const;  // 按当前格式显示协议地址
+    void setAddrHex(bool hex);              // 切换地址格式并刷新所有区
+    QString valueText(qint64 value) const;  // 按当前格式显示数值
+    void setValueHex(bool hex);             // 切换数值格式并刷新所有区原始值
 
     // 序号由垂直表头（Qt 自带行号）提供，故不再单独建列
     // 列序须与 setupTab 中表头顺序一致
@@ -93,6 +101,9 @@ private:
     QTabWidget        *m_tabs;
     QTableWidget      *m_tables[4];
     QList<RowData>     m_rows[4];
+    bool               m_hexAddr;  // 地址列格式：true=16进制 false=10进制
+    bool               m_hexValue; // 原始值格式：true=16进制 false=10进制
+    RealtimeData      *m_data;     // 实时数据中转站，切换数值格式时读取最新值
 };
 
 #endif // REGISTERVIEW_H

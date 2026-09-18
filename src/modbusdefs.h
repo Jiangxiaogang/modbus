@@ -79,10 +79,10 @@ inline const AreaInfo &areaInfo(int index)
 {
     static const AreaInfo areas[4] =
     {
-        { 0, "0区(遥控)",      1,    1,  5, 15, true  },
-        { 1, "1区(遥信)",  10001,    2,  0,  0, false },
-        { 2, "3区(遥测)",  30001,    4,  0,  0, false },
-        { 3, "4区(遥调)",  40001,    3,  6, 16, true  }
+        { 0, "DO/遥控",      1,    1,  5, 15, true  },
+        { 1, "DI/遥信",  10001,    2,  0,  0, false },
+        { 2, "AI/遥测",  30001,    4,  0,  0, false },
+        { 3, "AO/遥调",  40001,    3,  6, 16, true  }
     };
     return areas[index];
 }

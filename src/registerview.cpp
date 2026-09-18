@@ -1,6 +1,7 @@
 #include "registerview.h"
 #include "modbusdefs.h"
 #include "addregisterdialog.h"
+#include "realtimedata.h"
 
 #include <QTabWidget>
 #include <QTableWidget>
@@ -8,6 +9,7 @@
 #include <QComboBox>
 #include <QPushButton>
 #include <QMenu>
+#include <QActionGroup>
 #include <QHeaderView>
 #include <QVBoxLayout>
 #include <QMessageBox>
@@ -24,14 +26,20 @@ static QTableWidgetItem *makeReadOnlyItem(const QString &text)
 
 RegisterView::RegisterView(QWidget *parent)
     : QWidget(parent)
+    , m_hexAddr(true)
+    , m_hexValue(false)
+    , m_data(0)
 {
     QVBoxLayout *v = new QVBoxLayout(this);
     v->setMargin(4);
     m_tabs = new QTabWidget(this);
     v->addWidget(m_tabs);
 
-    for (int a = 0; a < 4; ++a)
+    // 显示顺序：DO/DI/AO/AI，即交换 3区 与 4区 的 TAB 位置
+    static const int tabOrder[4] = { 0, 1, 3, 2 };
+    for (int i = 0; i < 4; ++i)
     {
+        int a = tabOrder[i];
         setupTab(a);
         m_tabs->addTab(m_tables[a], areaInfo(a).name);
     }
@@ -173,7 +181,7 @@ void RegisterView::fillRow(QTableWidget *t, int areaIndex, int r,
     QTableWidgetItem *name = new QTableWidgetItem(rd.name);
     name->setFlags(name->flags() | Qt::ItemIsEditable);
     t->setItem(r, ColName, name);
-    t->setItem(r, ColAddr, makeReadOnlyItem(formatAddr(rd.protoAddr)));
+    t->setItem(r, ColAddr, makeReadOnlyItem(addrText(rd.protoAddr)));
     t->setItem(r, ColStatus, makeReadOnlyItem("无效"));
     t->item(r, ColStatus)->setTextColor(Qt::red);
     t->setItem(r, ColRaw, makeReadOnlyItem(""));
@@ -311,17 +319,21 @@ void RegisterView::onWriteClicked()
     {
         QMessageBox::warning(this, "写入失败",
             QString("%1 地址 %2 的设定值为空，请输入要写入的数值。")
-                .arg(areaInfo(area).name).arg(formatAddr(rd.protoAddr)));
+                .arg(areaInfo(area).name).arg(addrText(rd.protoAddr)));
         return;
     }
     bool ok = false;
-    qint64 val = txt.toLongLong(&ok);
+    qint64 val = 0;
+    if (txt.startsWith("0x", Qt::CaseInsensitive))
+        val = txt.mid(2).toLongLong(&ok, 16);
+    else
+        val = txt.toLongLong(&ok, 10);
     if (!ok)
     {
         btn->setText("错误");
         QMessageBox::warning(this, "写入失败",
             QString("%1 地址 %2 的设定值 \"%3\" 不是有效的数值。")
-                .arg(areaInfo(area).name).arg(formatAddr(rd.protoAddr)).arg(txt));
+                .arg(areaInfo(area).name).arg(addrText(rd.protoAddr)).arg(txt));
         return;
     }
     btn->setText("写入");
@@ -346,7 +358,7 @@ void RegisterView::onReadResult(const ReadPoint &pt)
     case ReadOk:
         st->setText("有效");
         st->setTextColor(Qt::darkGreen);
-        raw->setText(QString::number(pt.value));
+        raw->setText(valueText(pt.value));
         break;
 
     case ReadTimeout:
@@ -392,7 +404,7 @@ void RegisterView::onWriteResult(int areaIndex, int protoAddr, bool ok, const QS
         QMessageBox::warning(this, "写入失败",
             QString("%1 地址 %2 写入失败：%3")
                 .arg(areaInfo(areaIndex).name)
-                .arg(formatAddr(protoAddr))
+                .arg(addrText(protoAddr))
                 .arg(msg.isEmpty() ? QString("未知错误") : msg));
     }
 }
@@ -406,6 +418,60 @@ void RegisterView::onItemDoubleClicked(QTableWidgetItem *item)
     QPushButton *btn = qobject_cast<QPushButton *>(t->cellWidget(item->row(), ColWrite));
     if (btn)
         btn->setText("写入");
+}
+
+QString RegisterView::addrText(int protoAddr) const
+{
+    if (m_hexAddr)
+        return formatAddr(protoAddr);
+    return QString::number(protoAddr);
+}
+
+void RegisterView::setAddrHex(bool hex)
+{
+    if (m_hexAddr == hex) return;
+    m_hexAddr = hex;
+    for (int a = 0; a < 4; ++a)
+    {
+        QTableWidget *t = m_tables[a];
+        const QList<RowData> &rows = m_rows[a];
+        for (int r = 0; r < rows.size(); ++r)
+        {
+            QTableWidgetItem *it = t->item(r, ColAddr);
+            if (it) it->setText(addrText(rows[r].protoAddr));
+        }
+    }
+}
+
+void RegisterView::setRealtimeData(RealtimeData *data)
+{
+    m_data = data;
+}
+
+QString RegisterView::valueText(qint64 value) const
+{
+    if (m_hexValue)
+        return QString("0x%1").arg((quint16)value, 4, 16, QLatin1Char('0'));
+    return QString::number(value);
+}
+
+void RegisterView::setValueHex(bool hex)
+{
+    if (m_hexValue == hex || !m_data) return;
+    m_hexValue = hex;
+    for (int a = 0; a < 4; ++a)
+    {
+        QTableWidget *t = m_tables[a];
+        const QList<RowData> &rows = m_rows[a];
+        for (int r = 0; r < rows.size(); ++r)
+        {
+            QTableWidgetItem *it = t->item(r, ColRaw);
+            if (!it) continue;
+            ReadPoint pt = m_data->value(a, rows[r].protoAddr);
+            if (pt.status == ReadOk)
+                it->setText(valueText(pt.value));
+        }
+    }
 }
 
 int RegisterView::findRow(QTableWidget *table, int protoAddr) const
@@ -431,6 +497,30 @@ void RegisterView::onCustomContextMenu(const QPoint &pos)
     menu.addSeparator();
     QAction *clearAct = menu.addAction("清空列表");
     clearAct->setEnabled(t->rowCount() > 0);
+
+    menu.addSeparator();
+    QMenu *fmtMenu = menu.addMenu("地址格式");
+    QActionGroup *fmtGroup = new QActionGroup(&menu);
+    QAction *hexAct = fmtMenu->addAction("16进制");
+    hexAct->setCheckable(true);
+    hexAct->setActionGroup(fmtGroup);
+    QAction *decAct = fmtMenu->addAction("10进制");
+    decAct->setCheckable(true);
+    decAct->setActionGroup(fmtGroup);
+    hexAct->setChecked(m_hexAddr);
+    decAct->setChecked(!m_hexAddr);
+
+    QMenu *valMenu = menu.addMenu("数值格式");
+    QActionGroup *valGroup = new QActionGroup(&menu);
+    QAction *hexValAct = valMenu->addAction("16进制");
+    hexValAct->setCheckable(true);
+    hexValAct->setActionGroup(valGroup);
+    QAction *decValAct = valMenu->addAction("10进制");
+    decValAct->setCheckable(true);
+    decValAct->setActionGroup(valGroup);
+    hexValAct->setChecked(m_hexValue);
+    decValAct->setChecked(!m_hexValue);
+
     QAction *chosen = menu.exec(gpos);
     if (!chosen) return;
     if (chosen == addAct)
@@ -439,6 +529,14 @@ void RegisterView::onCustomContextMenu(const QPoint &pos)
         onDeleteRowsInArea(area, t);
     else if (chosen == clearAct)
         onClearArea(area, t);
+    else if (chosen == hexAct)
+        setAddrHex(true);
+    else if (chosen == decAct)
+        setAddrHex(false);
+    else if (chosen == hexValAct)
+        setValueHex(true);
+    else if (chosen == decValAct)
+        setValueHex(false);
 }
 
 void RegisterView::onQuickAddInArea(int area)
