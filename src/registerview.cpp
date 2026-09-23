@@ -55,6 +55,7 @@ void RegisterView::setupTab(int areaIndex)
     t->setHorizontalHeaderLabels({"寄存器名称", "寄存器地址", "数据类型", "字节序",
                                   "原始值", "设定值", "操作", "状态"});
     t->horizontalHeader()->setStretchLastSection(true);
+    t->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     t->setColumnWidth(ColName, 120);
     for (int c = ColAddr; c <= ColStatus; ++c)
     {
@@ -194,28 +195,29 @@ void RegisterView::fillRow(QTableWidget *t, int areaIndex, int r,
 
         QTableWidgetItem *typeItem = new QTableWidgetItem(dataTypeText(TypeBIT));
         typeItem->setFlags(typeItem->flags() & ~Qt::ItemIsEditable);
-        typeItem->setTextAlignment(Qt::AlignCenter);
+        typeItem->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         t->setItem(r, ColType, typeItem);
 
         QTableWidgetItem *boItem = new QTableWidgetItem("-");
         boItem->setFlags(boItem->flags() & ~Qt::ItemIsEditable);
-        boItem->setTextAlignment(Qt::AlignCenter);
+        boItem->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         t->setItem(r, ColByteOrder, boItem);
     }
     else
     {
 
         QTableWidgetItem *typeItem = new QTableWidgetItem(dataTypeText(rd.type));
-        typeItem->setTextAlignment(Qt::AlignCenter);
+        typeItem->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         t->setItem(r, ColType, typeItem);
 
         QTableWidgetItem *boItem = new QTableWidgetItem(byteOrderText(rd.byteOrder));
-        boItem->setTextAlignment(Qt::AlignCenter);
+        boItem->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         t->setItem(r, ColByteOrder, boItem);
     }
 
     QPushButton *wbtn = new QPushButton("写入", t);
     wbtn->setFlat(true);
+    wbtn->setStyleSheet("text-align: left;");
     t->setCellWidget(r, ColWrite, wbtn);
     connect(wbtn, &QPushButton::clicked, this, [this, t, areaIndex, wbtn]{ doWrite(areaIndex, t, wbtn); });
 
@@ -475,24 +477,20 @@ void RegisterView::onReadResult(const ReadPoint &pt)
     case ReadTimeout:
         st->setText("超时");
         st->setTextColor(Qt::red);
-        raw->setText("—");
         st->setToolTip(pt.errText);
         break;
 
     case ReadError:
-
         st->setText(QString("错误:0x%1(%2)")
                     .arg((quint8)pt.errValue, 2, 16, QLatin1Char('0'))
                     .arg(pt.errText));
         st->setTextColor(Qt::red);
         st->setToolTip(pt.errText);
-        raw->setText("—");
         break;
 
     default:
         st->setText("无效");
         st->setTextColor(Qt::red);
-        raw->setText("");
         if (!pt.errText.isEmpty())
         {
             st->setToolTip(pt.errText);
