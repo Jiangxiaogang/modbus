@@ -23,6 +23,35 @@ ModbusWorker::~ModbusWorker() = default;
 
 void ModbusWorker::applyConfig()
 {
+    QMetaObject::invokeMethod(this, [this]{ doApplyConfig(); }, Qt::QueuedConnection);
+}
+
+void ModbusWorker::connectDevice()
+{
+    QMetaObject::invokeMethod(this, [this]{ doConnectDevice(); }, Qt::QueuedConnection);
+}
+
+void ModbusWorker::disconnectDevice()
+{
+    QMetaObject::invokeMethod(this, [this]{ doDisconnectDevice(); }, Qt::QueuedConnection);
+}
+
+void ModbusWorker::setAreaPlan(int areaIndex, const QList<RegPlanItem> &items)
+{
+    QMetaObject::invokeMethod(this, [this, areaIndex, items]{ doSetAreaPlan(areaIndex, items); },
+                              Qt::QueuedConnection);
+}
+
+void ModbusWorker::writeRegister(int areaIndex, int address, DataType type,
+                                 ByteOrder byteOrder, qint64 value)
+{
+    QMetaObject::invokeMethod(this, [this, areaIndex, address, type, byteOrder, value]{
+        doWriteRegister(areaIndex, address, type, byteOrder, value);
+    }, Qt::QueuedConnection);
+}
+
+void ModbusWorker::doApplyConfig()
+{
     QMutexLocker lock(&m_mutex);
 
     m_cfg.protocol        = m_cfgPtr->protocol;
@@ -40,7 +69,7 @@ void ModbusWorker::applyConfig()
         emit infoMessage("协议配置已更新");
 }
 
-void ModbusWorker::connectDevice()
+void ModbusWorker::doConnectDevice()
 {
     QMutexLocker lock(&m_mutex);
     m_cfg = *m_cfgPtr;
@@ -64,7 +93,7 @@ void ModbusWorker::connectDevice()
     emit infoMessage("连接成功");
 }
 
-void ModbusWorker::disconnectDevice()
+void ModbusWorker::doDisconnectDevice()
 {
     QMutexLocker lock(&m_mutex);
     if (m_timer) m_timer->stop();
@@ -75,12 +104,11 @@ void ModbusWorker::disconnectDevice()
         emit infoMessage("已断开连接");
 }
 
-void ModbusWorker::setAreaPlan(int areaIndex, QList<RegPlanItem> *items)
+void ModbusWorker::doSetAreaPlan(int areaIndex, const QList<RegPlanItem> &items)
 {
     if (areaIndex < 0 || areaIndex > 3) return;
     QMutexLocker lock(&m_mutex);
-    m_plans[areaIndex] = *items;
-    delete items;
+    m_plans[areaIndex] = items;
 }
 
 void ModbusWorker::doPoll()
@@ -225,8 +253,8 @@ void ModbusWorker::readChunk(int areaIndex, int start, int cnt,
     }
 }
 
-void ModbusWorker::writeRegister(int areaIndex, int address, DataType type,
-                                 ByteOrder byteOrder, qint64 value)
+void ModbusWorker::doWriteRegister(int areaIndex, int address, DataType type,
+                                   ByteOrder byteOrder, qint64 value)
 {
     QMutexLocker lock(&m_mutex);
     if (!m_device->isConnected())

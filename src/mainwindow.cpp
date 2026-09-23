@@ -60,12 +60,18 @@ MainWindow::MainWindow(QWidget *parent)
     m_data = new RegisterData(this);
     m_view->setRegisterData(m_data);
 
-    connect(m_panel, &ConnectionPanel::connectClicked, m_worker, &ModbusWorker::connectDevice);
-    connect(m_panel, &ConnectionPanel::disconnectClicked, m_worker, &ModbusWorker::disconnectDevice);
-    connect(m_panel, &ConnectionPanel::configChanged, m_worker, &ModbusWorker::applyConfig);
+    connect(m_panel, &ConnectionPanel::connectClicked, this,
+            [this]{ m_worker->connectDevice(); });
+    connect(m_panel, &ConnectionPanel::disconnectClicked, this,
+            [this]{ m_worker->disconnectDevice(); });
+    connect(m_panel, &ConnectionPanel::configChanged, this,
+            [this]{ m_worker->applyConfig(); });
 
-    connect(m_view, &RegisterView::planChanged, m_worker, &ModbusWorker::setAreaPlan);
-    connect(m_view, &RegisterView::writeRequested, m_worker, &ModbusWorker::writeRegister);
+    connect(m_view, &RegisterView::planChanged, this,
+            [this](int area, const QList<RegPlanItem> &items){ m_worker->setAreaPlan(area, items); });
+    connect(m_view, &RegisterView::writeRequested, this,
+            [this](int area, int addr, DataType type, ByteOrder order, qint64 value)
+            { m_worker->writeRegister(area, addr, type, order, value); });
 
     connect(m_worker, &ModbusWorker::connectionStateChanged, this, &MainWindow::onConnectionState);
     connect(m_worker, &ModbusWorker::connectError, this, &MainWindow::onConnectError);

@@ -210,9 +210,9 @@ void RegisterView::fillRow(QTableWidget *t, int areaIndex, int r,
 
 void RegisterView::rebuildPlan(int areaIndex)
 {
-    QList<RegPlanItem> *items = new QList<RegPlanItem>();
+    QList<RegPlanItem> items;
     for (const RowData &rd : m_rows[areaIndex])
-        items->append(RegPlanItem{rd.protoAddr, rd.type, rd.byteOrder});
+        items.append(RegPlanItem{rd.protoAddr, rd.type, rd.byteOrder});
     emit planChanged(areaIndex, items);
 }
 

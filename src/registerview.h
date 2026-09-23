@@ -75,7 +75,7 @@ public:
 
 signals:
 
-    void planChanged(int areaIndex, QList<RegPlanItem> *items);
+    void planChanged(int areaIndex, const QList<RegPlanItem> &items);
 
     void writeRequested(int areaIndex, int protoAddr, DataType type,
                         ByteOrder byteOrder, qint64 value);

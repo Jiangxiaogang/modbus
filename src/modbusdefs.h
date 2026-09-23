@@ -4,7 +4,6 @@
 #include <QString>
 #include <QStringList>
 #include <QList>
-#include <QMetaType>
 
 enum ChannelType
 {
@@ -35,8 +34,6 @@ enum DataType
     TypeF32
 };
 
-Q_DECLARE_METATYPE(DataType)
-
 enum ByteOrder
 {
     ByteOrderAB = 0,
@@ -46,7 +43,6 @@ enum ByteOrder
     ByteOrderBADC,
     ByteOrderDCBA
 };
-Q_DECLARE_METATYPE(ByteOrder)
 
 enum ReadStatus
 {
@@ -97,8 +93,6 @@ struct RegPlanItem
     DataType  type;
     ByteOrder byteOrder;
 };
-
-Q_DECLARE_METATYPE(QList<RegPlanItem> *)
 
 struct ModbusConfig
 {
