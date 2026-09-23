@@ -1,11 +1,11 @@
 #include "connectionpanel.h"
 #include "modbusdefs.h"
-#include "seriallist.h"
 
 #include <QLabel>
 #include <QFormLayout>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QSerialPortInfo>
 
 static void setLabelWidth(QFormLayout *form, int width)
 {
@@ -135,8 +135,15 @@ ConnectionPanel::ConnectionPanel(QWidget *parent)
 
 void ConnectionPanel::refreshSerialPorts()
 {
+    QStringList ports;
+    const QList<QSerialPortInfo> list = QSerialPortInfo::availablePorts();
+    for (const QSerialPortInfo &info : list)
+        ports.append(info.portName());
+    if (ports.isEmpty())
+        ports.append("COM1");
+
     m_serPortCombo->clear();
-    m_serPortCombo->addItems(SerialList::getSerialPorts());
+    m_serPortCombo->addItems(ports);
 }
 
 const ModbusConfig& ConnectionPanel::getConfig()

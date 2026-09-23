@@ -25,8 +25,7 @@ SOURCES += \
     src/modbusworker.cpp \
     src/commmonitor.cpp \
     src/realtimedata.cpp \
-    src/serialtransport.cpp \
-    src/seriallist.cpp
+    src/serialtransport.cpp
 
 # Header files
 HEADERS += \
@@ -48,8 +47,7 @@ HEADERS += \
     src/commevent.h \
     src/realtimedata.h \
     src/modbustransport.h \
-    src/serialtransport.h \
-    src/seriallist.h
+    src/serialtransport.h
 
 # Windows EXE resource
 RC_FILE = res/app.rc
