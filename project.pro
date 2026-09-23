@@ -1,13 +1,10 @@
-# QT5.12 Project File
 QT       += core gui widgets network serialport
 TARGET    = modbus
 TEMPLATE  = app
 CONFIG   += c++11
 
-# Include paths
 INCLUDEPATH += $$PWD/src
 
-# Source files
 SOURCES += \
     src/main.cpp \
     src/mainwindow.cpp \
@@ -20,14 +17,11 @@ SOURCES += \
     src/modbuscodec.cpp \
     src/tcptransport.cpp \
     src/udptransport.cpp \
-    src/modbusclient.cpp \
     src/modbusdevice.cpp \
     src/modbusworker.cpp \
-    src/commmonitor.cpp \
-    src/realtimedata.cpp \
+    src/registerdata.cpp \
     src/serialtransport.cpp
 
-# Header files
 HEADERS += \
     src/mainwindow.h \
     src/connectionpanel.h \
@@ -40,19 +34,14 @@ HEADERS += \
     src/modbuscodec.h \
     src/tcptransport.h \
     src/udptransport.h \
-    src/modbusclient.h \
     src/modbusdevice.h \
     src/modbusworker.h \
-    src/commmonitor.h \
-    src/commevent.h \
-    src/realtimedata.h \
+    src/registerdata.h \
     src/modbustransport.h \
     src/serialtransport.h
 
-# Windows EXE resource
 RC_FILE = res/app.rc
 
-# GCC spec
-QMAKE_CFLAGS += -std=c11        # C 语言标准
-QMAKE_CXXFLAGS += -std=c++11    # C++ 语言标准
+QMAKE_CFLAGS += -std=c11
+QMAKE_CXXFLAGS += -std=c++11
 QMAKE_CXXFLAGS_WARN_ON = -Wall

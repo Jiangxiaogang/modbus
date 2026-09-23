@@ -6,7 +6,6 @@
 
 class QSerialPort;
 
-// 基于 QtSerialPort 的串口传输（Qt5 内置模块）
 class SerialTransport : public ITransport
 {
 public:
@@ -21,7 +20,7 @@ public:
     QString errorString() const override;
 
 private:
-    int charIntervalMs() const; // 3.5 字符时间(ms)，用于帧边界
+    int charIntervalMs() const;
 
     QString      m_portName;
     int          m_baudRate;
@@ -32,4 +31,4 @@ private:
     QString      m_err;
 };
 
-#endif // SERIALTRANSPORT_H
+#endif

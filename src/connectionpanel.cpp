@@ -24,7 +24,6 @@ ConnectionPanel::ConnectionPanel(QWidget *parent)
     QVBoxLayout *root = new QVBoxLayout(this);
     root->setContentsMargins(4,4,0,4);
 
-    // ---------- 通道配置 ----------
     QGroupBox *connGrp = new QGroupBox("通道配置", this);
     QFormLayout *connLayout = new QFormLayout(connGrp);
 
@@ -39,7 +38,6 @@ ConnectionPanel::ConnectionPanel(QWidget *parent)
     connLayout->addRow("连接方式:", connOpsLayout);
     setLabelWidth(connLayout, 55);
 
-    // ---------- 串口通道配置 ----------
     m_serGroup = new QGroupBox("串口配置", this);
     QFormLayout *serLayout = new QFormLayout(m_serGroup);
 
@@ -58,7 +56,6 @@ ConnectionPanel::ConnectionPanel(QWidget *parent)
     serLayout->addRow("校验位:", m_parityCombo);
     setLabelWidth(serLayout, 55);
 
-    // ---------- 网络通道配置 ----------
     m_netGroup = new QGroupBox("网络配置", this);
     QFormLayout *netLayout = new QFormLayout(m_netGroup);
 
@@ -75,7 +72,6 @@ ConnectionPanel::ConnectionPanel(QWidget *parent)
     netLayout->addRow("端口号:", m_netPortSpin);
     setLabelWidth(netLayout, 55);
 
-    // ---------- 协议配置 ----------
     QGroupBox *protoGrp = new QGroupBox("协议配置", this);
     QFormLayout *pf = new QFormLayout(protoGrp);
 
@@ -118,15 +114,13 @@ ConnectionPanel::ConnectionPanel(QWidget *parent)
     root->addWidget(m_serGroup);
     root->addWidget(m_netGroup);
     root->addWidget(protoGrp);
-    // 下方可伸缩占位组框：填充与底部通信日志之间的空白区域
+
     root->addWidget(new QGroupBox(this), 1);
 
-    // 信号连接
     connect(m_connCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this](int idx){ m_serGroup->setVisible(idx == 0); m_netGroup->setVisible(idx == 1); });
     connect(m_connectBtn, &QPushButton::clicked, this, &ConnectionPanel::onConnectButton);
 
-    // 协议/轮询层：连接后改动即时下发（由 m_connected 守卫）
     for (QComboBox *cb : {m_protoCombo, m_readModeCombo, m_coilFuncCombo, m_regFuncCombo})
         connect(cb, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ConnectionPanel::onProtocolChanged);
     for (QSpinBox *sb : {m_slaveSpin, m_timeoutSpin, m_pollSpin})
@@ -205,13 +199,13 @@ void ConnectionPanel::onConnectButton()
     m_connectBtn->setEnabled(false);
     setWidgetEnabled(false);
     buildConfig();
-    emit connectClicked(&m_config);
+    emit connectClicked();
 }
 
 void ConnectionPanel::setConnected(bool connected)
 {
     m_connected = connected;
-    // 传输层参数连接期间锁定；协议/轮询层始终可改，改动即时生效
+
     setTransportEnabled(!connected);
     setProtocolEnabled(true);
     m_connectBtn->setText(connected ? "断开" : "连接");
@@ -223,5 +217,5 @@ void ConnectionPanel::onProtocolChanged()
     if (!m_connected)
         return;
     buildConfig();
-    emit configChanged(m_config);
+    emit configChanged();
 }

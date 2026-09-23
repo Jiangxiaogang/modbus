@@ -50,8 +50,8 @@ QByteArray ModbusCodec::encode(ProtocolType proto, quint8 slave,
     if (proto == ProtocolRTU)
     {
         quint16 crc = modbusCrc(frame.constData(), frame.size());
-        frame.append((char)(crc & 0xFF));        // CRC Lo
-        frame.append((char)((crc >> 8) & 0xFF)); // CRC Hi
+        frame.append((char)(crc & 0xFF));
+        frame.append((char)((crc >> 8) & 0xFF));
     }
     else if (proto == ProtocolASCII)
     {
@@ -62,17 +62,17 @@ QByteArray ModbusCodec::encode(ProtocolType proto, quint8 slave,
         out.append("\r\n");
         return out;
     }
-    else     // ProtocolTCP
+    else
     {
         QByteArray mbap;
         mbap.append((char)0x00);
-        mbap.append((char)0x01); // 事务ID(占位)
+        mbap.append((char)0x01);
         mbap.append((char)0x00);
-        mbap.append((char)0x00); // 协议ID = 0
-        int len = frame.size();                  // 单元ID + PDU
+        mbap.append((char)0x00);
+        int len = frame.size();
         mbap.append((char)((len >> 8) & 0xFF));
         mbap.append((char)(len & 0xFF));
-        return mbap + frame;                     // frame 这里已含单元ID(slave)
+        return mbap + frame;
     }
     return frame;
 }
@@ -86,7 +86,7 @@ QByteArray ModbusCodec::tryExtract(ProtocolType proto,
 
     if (proto == ProtocolRTU)
     {
-        // 传输层已按 3.5 字符间隔成帧，整段即一帧；最小长度 4 (从站+功能+数据+crc 至少)
+
         if (buffer.size() < 4)
             return QByteArray();
         *frameLen = buffer.size();
@@ -94,17 +94,17 @@ QByteArray ModbusCodec::tryExtract(ProtocolType proto,
     }
     else if (proto == ProtocolASCII)
     {
-        // 找到 ':' ... CRLF
+
         int start = buffer.indexOf(':');
         if (start < 0)
             return QByteArray();
         int end = buffer.indexOf("\r\n", start);
         if (end < 0)
-            return QByteArray(); // 还不完整
+            return QByteArray();
         *frameLen = end + 2 - start;
         return buffer.mid(start, end + 2 - start);
     }
-    else     // ProtocolTCP
+    else
     {
         if (buffer.size() < 6)
             return QByteArray();
@@ -129,7 +129,7 @@ bool ModbusCodec::decode(ProtocolType proto, const QByteArray &frame,
     {
         if (frame.size() < 4)
             return false;
-        // 校验 CRC
+
         QByteArray body = frame.left(frame.size() - 2);
         quint16 crc = modbusCrc(body.constData(), body.size());
         quint16 got = (quint8)frame[frame.size() - 1];
@@ -145,7 +145,7 @@ bool ModbusCodec::decode(ProtocolType proto, const QByteArray &frame,
     {
         if (frame[0] != ':' || !frame.endsWith("\r\n"))
             return false;
-        QByteArray hex = frame.mid(1, frame.size() - 3); // 去掉 ':' 和 CRLF
+        QByteArray hex = frame.mid(1, frame.size() - 3);
         QByteArray bytes;
         if (!fromHexBytes(hex, bytes) || bytes.size() < 3)
             return false;
@@ -157,7 +157,7 @@ bool ModbusCodec::decode(ProtocolType proto, const QByteArray &frame,
         pdu   = bytes.mid(2, bytes.size() - 3);
         return true;
     }
-    else     // ProtocolTCP
+    else
     {
         if (frame.size() < 7)
             return false;
@@ -166,7 +166,7 @@ bool ModbusCodec::decode(ProtocolType proto, const QByteArray &frame,
             return false;
         slave = (quint8)frame[6];
         func  = (quint8)frame[7];
-        pdu   = frame.mid(8);   // 剩余即 PDU (func 之后)
+        pdu   = frame.mid(8);
         return true;
     }
 }

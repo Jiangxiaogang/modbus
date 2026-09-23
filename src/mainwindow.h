@@ -2,12 +2,14 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QByteArray>
 
 class ConnectionPanel;
 class RegisterView;
 class CommLogView;
 class ModbusWorker;
-class RealtimeData;
+class ModbusDevice;
+class RegisterData;
 class QThread;
 class QLabel;
 
@@ -21,21 +23,33 @@ public:
 private slots:
     void onConnectionState(bool connected);
     void onConnectError(const QString &msg);
-    void onStats(quint32 tx, quint32 rx, quint32 err);
-    // 桥接：工作线程读结果 -> 中转站 API
+
     void onWorkerReadResult(int areaIndex, int address, int status,
                             qint64 value, const QString &errText, qint64 errValue);
 
+    void onFrameSent(const QByteArray &frame, quint8 func);
+    void onFrameReceived(const QByteArray &frame, quint8 func);
+    void onOperationError(const QString &err, quint8 modbusErr);
+    void onInfoMessage(const QString &text);
+    void onErrorMessage(const QString &text);
+
 private:
+    void updateStats();
+
     ConnectionPanel *m_panel;
     RegisterView    *m_view;
-    CommLogView     *m_log;   // 底部通信日志
+    CommLogView     *m_log;
+    ModbusDevice    *m_device;
     ModbusWorker    *m_worker;
-    RealtimeData    *m_data;   // 实时数据中转站
+    RegisterData    *m_data;
     QThread         *m_thread;
 
     QLabel *m_lblConn;
     QLabel *m_lblStats;
+
+    quint32 m_tx  = 0;
+    quint32 m_rx  = 0;
+    quint32 m_err = 0;
 };
 
-#endif // MAINWINDOW_H
+#endif

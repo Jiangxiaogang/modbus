@@ -23,7 +23,7 @@ AboutDialog::AboutDialog(QWidget *parent)
     QLabel *verLbl  = new QLabel(QString("版本 %1 (基于 Qt %2 构建)").arg(APP_VERSION_STR).arg(qVersion()), this);
     QLabel *descLbl = new QLabel(APP_DESCRIPTION, this);
     QLabel *copyLbl = new QLabel(APP_COPYRIGHT, this);
-    copyLbl->setEnabled(false); // 灰色弱化显示版权行
+    copyLbl->setEnabled(false);
 
     for (QLabel *lbl : {nameLbl, verLbl, descLbl, copyLbl})
         lbl->setAlignment(Qt::AlignCenter);

@@ -16,4 +16,4 @@ public:
     virtual QString errorString() const = 0;
 };
 
-#endif // TRANSPORT_H
+#endif

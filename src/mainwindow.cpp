@@ -3,8 +3,8 @@
 #include "registerview.h"
 #include "commlogview.h"
 #include "modbusworker.h"
-#include "commmonitor.h"
-#include "realtimedata.h"
+#include "modbusdevice.h"
+#include "registerdata.h"
 #include "modbusdefs.h"
 #include "aboutdialog.h"
 #include "version.h"
@@ -24,14 +24,12 @@ MainWindow::MainWindow(QWidget *parent)
     setMinimumSize(960, 500);
     resize(960, 500);
 
-    // 左侧连接区 / 右侧数据区
     QSplitter *split = new QSplitter(Qt::Horizontal, this);
     m_panel = new ConnectionPanel(split);
     m_view  = new RegisterView(split);
     split->setStretchFactor(0, 0);
     split->setStretchFactor(1, 1);
 
-    // 底部通信日志：纵向分割，拖动分割条可调整日志区高度
     m_log = new CommLogView(this);
     QSplitter *vsplit = new QSplitter(Qt::Vertical, this);
     vsplit->addWidget(split);
@@ -41,49 +39,46 @@ MainWindow::MainWindow(QWidget *parent)
     vsplit->setSizes({320, 130});
     setCentralWidget(vsplit);
 
-    // 状态栏
     m_lblConn = new QLabel("设备未连接", this);
     m_lblStats = new QLabel("TX:0  RX:0  ERR:0", this);
     statusBar()->addWidget(m_lblConn, 1);
     statusBar()->addPermanentWidget(m_lblStats);
     statusBar()->setStyleSheet("QStatusBar {border-top: 1px solid palette(mid);}");
 
-    // F1 弹出“关于”对话框（无菜单栏，用快捷键提供入口）
     QShortcut *aboutSc = new QShortcut(QKeySequence(Qt::Key_F1), this);
     connect(aboutSc, &QShortcut::activated, this, [this]{ AboutDialog dlg(this); dlg.exec(); });
 
-    // 工作线程
     m_thread = new QThread(this);
-    m_worker = new ModbusWorker;
+    m_device = new ModbusDevice;
+    m_worker = new ModbusWorker(m_device, &m_panel->getConfig());
+    m_device->moveToThread(m_thread);
     m_worker->moveToThread(m_thread);
+    connect(m_thread, &QThread::finished, m_device, &QObject::deleteLater);
     connect(m_thread, &QThread::finished, m_worker, &QObject::deleteLater);
     m_thread->start();
 
-    // 实时数据对象（中转站），位于 GUI 线程
-    m_data = new RealtimeData(this);
-    m_view->setRealtimeData(m_data);
+    m_data = new RegisterData(this);
+    m_view->setRegisterData(m_data);
 
-    // 面板 -> 工作线程
     connect(m_panel, &ConnectionPanel::connectClicked, m_worker, &ModbusWorker::connectDevice);
     connect(m_panel, &ConnectionPanel::disconnectClicked, m_worker, &ModbusWorker::disconnectDevice);
-    // 连接后协议/轮询层改动：值传递排队到工作线程热更新
     connect(m_panel, &ConnectionPanel::configChanged, m_worker, &ModbusWorker::applyConfig);
 
-    // 数据区 -> 工作线程
     connect(m_view, &RegisterView::planChanged, m_worker, &ModbusWorker::setAreaPlan);
     connect(m_view, &RegisterView::writeRequested, m_worker, &ModbusWorker::writeRegister);
 
-    // 工作线程 -> UI
     connect(m_worker, &ModbusWorker::connectionStateChanged, this, &MainWindow::onConnectionState);
     connect(m_worker, &ModbusWorker::connectError, this, &MainWindow::onConnectError);
 
-    // 报文监控（worker 线程）-> 日志视图 / 状态栏（排队连接）
-    connect(m_worker->monitor(), &CommMonitor::eventAppended, m_log, &CommLogView::appendEvent);
-    connect(m_worker->monitor(), &CommMonitor::statsUpdated, this, &MainWindow::onStats);
+    connect(m_device, &ModbusDevice::frameSent,       this, &MainWindow::onFrameSent);
+    connect(m_device, &ModbusDevice::frameReceived,   this, &MainWindow::onFrameReceived);
+    connect(m_device, &ModbusDevice::operationFailed, this, &MainWindow::onOperationError);
 
-    // 采集 -> 中转站 -> 展示：读到数据先经 API 写入 RealtimeData，再转发给视图显示
+    connect(m_worker, &ModbusWorker::infoMessage,  this, &MainWindow::onInfoMessage);
+    connect(m_worker, &ModbusWorker::errorMessage, this, &MainWindow::onErrorMessage);
+
     connect(m_worker, &ModbusWorker::readResult, this, &MainWindow::onWorkerReadResult);
-    connect(m_data, &RealtimeData::dataChanged, m_view, &RegisterView::onReadResult);
+    connect(m_data, &RegisterData::dataChanged, m_view, &RegisterView::onReadResult);
     connect(m_worker, &ModbusWorker::writeResult, m_view, &RegisterView::onWriteResult);
 }
 
@@ -98,6 +93,10 @@ void MainWindow::onConnectionState(bool connected)
     m_panel->setConnected(connected);
     if (connected)
     {
+
+        m_tx = m_rx = m_err = 0;
+        updateStats();
+
         const ModbusConfig &cfg = m_panel->getConfig();
         QString endpoint = (cfg.channel == ChannelSerial)
                            ? cfg.portName
@@ -119,9 +118,41 @@ void MainWindow::onConnectError(const QString &msg)
     QMessageBox::warning(this, "连接失败", msg);
 }
 
-void MainWindow::onStats(quint32 tx, quint32 rx, quint32 err)
+void MainWindow::updateStats()
 {
-    m_lblStats->setText(QString("TX:%1  RX:%2  ERR:%3").arg(tx).arg(rx).arg(err));
+    m_lblStats->setText(QString("TX:%1  RX:%2  ERR:%3").arg(m_tx).arg(m_rx).arg(m_err));
+}
+
+void MainWindow::onFrameSent(const QByteArray &frame, quint8 func)
+{
+    ++m_tx;
+    m_log->appendFrame(true, frame, func);
+    updateStats();
+}
+
+void MainWindow::onFrameReceived(const QByteArray &frame, quint8 func)
+{
+    ++m_rx;
+    m_log->appendFrame(false, frame, func);
+    updateStats();
+}
+
+void MainWindow::onOperationError(const QString &err, quint8 modbusErr)
+{
+    Q_UNUSED(modbusErr);
+    ++m_err;
+    m_log->appendError(err);
+    updateStats();
+}
+
+void MainWindow::onInfoMessage(const QString &text)
+{
+    m_log->appendInfo(text);
+}
+
+void MainWindow::onErrorMessage(const QString &text)
+{
+    m_log->appendError(text);
 }
 
 void MainWindow::onWorkerReadResult(int areaIndex, int address, int status,

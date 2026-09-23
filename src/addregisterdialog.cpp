@@ -7,7 +7,6 @@
 #include <QDialogButtonBox>
 #include <QVBoxLayout>
 
-// 解析用户输入的寄存器地址：支持十进制与 0x/0X 开头的十六进制
 static bool parseAddr(const QString &text, int *addr)
 {
     QString s = text.trimmed();
@@ -40,7 +39,7 @@ AddRegisterDialog::AddRegisterDialog(int areaIndex, QWidget *parent)
     m_byteOrderCombo = new QComboBox(this);
     if (bitArea)
     {
-        // 位区类型固定 bit、无字节序，禁用选择
+
         m_typeCombo->addItem(dataTypeText(TypeBIT));
         m_typeCombo->setEnabled(false);
         m_byteOrderCombo->addItem("-");
@@ -50,7 +49,7 @@ AddRegisterDialog::AddRegisterDialog(int areaIndex, QWidget *parent)
     {
         m_typeCombo->addItems(dataTypeTextsAll());
         refreshByteOrderOptions();
-        // 类型位宽变化时同步切换可选字节序
+
         connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
                 this, [this](int){ refreshByteOrderOptions(); });
     }
@@ -69,7 +68,6 @@ AddRegisterDialog::AddRegisterDialog(int areaIndex, QWidget *parent)
     connect(bbox, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(bbox, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
-    // 地址非法时禁用确定按钮，避免传入越界地址
     connect(m_addrEdit, &QLineEdit::textChanged, this,
             [this]{ m_okBtn->setEnabled(parseAddr(m_addrEdit->text(), nullptr)); });
     m_okBtn->setEnabled(parseAddr(m_addrEdit->text(), nullptr));

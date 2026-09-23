@@ -28,4 +28,4 @@ private:
     QString     m_err;
 };
 
-#endif // TCPTRANSPORT_H
+#endif

@@ -1,7 +1,7 @@
 #include "registerview.h"
 #include "modbusdefs.h"
 #include "addregisterdialog.h"
-#include "realtimedata.h"
+#include "registerdata.h"
 
 #include <QTabWidget>
 #include <QTableWidget>
@@ -18,7 +18,6 @@
 #include <functional>
 #include <cstring>
 
-// 只读单元格项：去掉可编辑标志，禁止双击进入编辑
 static QTableWidgetItem *makeReadOnlyItem(const QString &text)
 {
     QTableWidgetItem *it = new QTableWidgetItem(text);
@@ -36,7 +35,6 @@ RegisterView::RegisterView(QWidget *parent)
     m_tabs = new QTabWidget(this);
     v->addWidget(m_tabs);
 
-    // TAB 顺序由 areaInfo() 的数组顺序决定：DO/DI/AO/AI
     for (int a = 0; a < 4; ++a)
     {
         setupTab(a);
@@ -88,13 +86,10 @@ int RegisterView::addRegisters(int areaIndex, int startAddr, int count,
     const AreaInfo &info = areaInfo(areaIndex);
     const int base = info.plcBase;
 
-    // 现有地址集合，O(1) 查重，替代逐项线性查找
     QSet<int> existing;
     for (const RowData &rd : m_rows[areaIndex])
         existing.insert(rd.protoAddr);
 
-    // 预生成待添加项：越界忽略，重复地址计入跳过数
-    // 32位类型每点占两个寄存器，地址间隔为2
     const int step = is32BitType(type) ? 2 : 1;
     QList<RowData> adds;
     int dup = 0;
@@ -103,7 +98,7 @@ int RegisterView::addRegisters(int areaIndex, int startAddr, int count,
         int proto = startAddr + i * step;
         if (proto < 0 || proto > 65535)
             continue;
-        // 32位类型占两个连续寄存器，末地址需预留一个
+
         if (is32BitType(type) && proto > 65534)
             continue;
         if (existing.contains(proto))
@@ -127,14 +122,13 @@ int RegisterView::addRegisters(int areaIndex, int startAddr, int count,
         return dup;
     }
 
-    // 批量插入期间暂停重绘，避免逐行刷新导致长时间无响应
     t->setUpdatesEnabled(false);
     t->viewport()->setUpdatesEnabled(false);
 
     const int oldCount = m_rows[areaIndex].size();
     if (oldCount == 0 || adds.first().protoAddr >= m_rows[areaIndex].last().protoAddr)
     {
-        // 常见路径：新地址全部追加在尾部，一次性扩展行数后逐个填充新增行
+
         m_rows[areaIndex] += adds;
         t->setRowCount(oldCount + adds.size());
         for (int k = 0; k < adds.size(); ++k)
@@ -142,7 +136,7 @@ int RegisterView::addRegisters(int areaIndex, int startAddr, int count,
     }
     else
     {
-        // 中间插入：按升序逐项找位
+
         int pos = 0;
         for (const RowData &rd : adds)
         {
@@ -163,7 +157,6 @@ int RegisterView::addRegisters(int areaIndex, int startAddr, int count,
     return dup;
 }
 
-// 填充一行单元格与行内控件（类型下拉 / 写入按钮）
 void RegisterView::fillRow(QTableWidget *t, int areaIndex, int r,
                            const RowData &rd, const AreaInfo &info)
 {
@@ -178,13 +171,12 @@ void RegisterView::fillRow(QTableWidget *t, int areaIndex, int r,
 
     if (areaIndex == 0 || areaIndex == 1)
     {
-        // 0区/1区为位类型，固定 BIT，不可编辑
+
         QTableWidgetItem *typeItem = new QTableWidgetItem(dataTypeText(TypeBIT));
         typeItem->setFlags(typeItem->flags() & ~Qt::ItemIsEditable);
         typeItem->setTextAlignment(Qt::AlignCenter);
         t->setItem(r, ColType, typeItem);
 
-        // 位区无字节序概念，固定显示 '-' 且不可编辑
         QTableWidgetItem *boItem = new QTableWidgetItem("-");
         boItem->setFlags(boItem->flags() & ~Qt::ItemIsEditable);
         boItem->setTextAlignment(Qt::AlignCenter);
@@ -192,12 +184,11 @@ void RegisterView::fillRow(QTableWidget *t, int areaIndex, int r,
     }
     else
     {
-        // 3区/4区支持多种数据类型选择：双击进入编辑，由 TypeDelegate 弹出下拉框
+
         QTableWidgetItem *typeItem = new QTableWidgetItem(dataTypeText(rd.type));
         typeItem->setTextAlignment(Qt::AlignCenter);
         t->setItem(r, ColType, typeItem);
 
-        // AI/AO 支持字节序选择：双击进入编辑，由 ByteOrderDelegate 弹出下拉框
         QTableWidgetItem *boItem = new QTableWidgetItem(byteOrderText(rd.byteOrder));
         boItem->setTextAlignment(Qt::AlignCenter);
         t->setItem(r, ColByteOrder, boItem);
@@ -208,7 +199,6 @@ void RegisterView::fillRow(QTableWidget *t, int areaIndex, int r,
     t->setCellWidget(r, ColWrite, wbtn);
     connect(wbtn, &QPushButton::clicked, this, [this, t, areaIndex, wbtn]{ doWrite(areaIndex, t, wbtn); });
 
-    // 不可写区域：设定值不可编辑，写入按钮禁用
     if (!info.writable)
     {
         QTableWidgetItem *set = t->item(r, ColSet);
@@ -226,12 +216,11 @@ void RegisterView::rebuildPlan(int areaIndex)
     emit planChanged(areaIndex, items);
 }
 
-// 类型编辑提交回调（由 TypeDelegate 在 setModelData 中调用）
 void RegisterView::commitType(int area, int row, DataType tp)
 {
     if (area < 0 || area > 3 || row < 0 || row >= m_rows[area].size()) return;
     m_rows[area][row].type = tp;
-    // 类型位宽变化时，原字节序可能不再适用，规范化为该类型的默认值
+
     if (!byteOrderValidFor(tp, m_rows[area][row].byteOrder))
     {
         m_rows[area][row].byteOrder = is32BitType(tp) ? ByteOrderABCD : ByteOrderAB;
@@ -248,15 +237,12 @@ DataType RegisterView::rowType(int area, int row) const
     return m_rows[area][row].type;
 }
 
-// 字节序编辑提交回调（由 ByteOrderDelegate 在 setModelData 中调用）
 void RegisterView::commitByteOrder(int area, int row, ByteOrder bo)
 {
     if (area < 0 || area > 3 || row < 0 || row >= m_rows[area].size()) return;
     m_rows[area][row].byteOrder = bo;
     rebuildPlan(area);
 }
-
-// ---------- TypeDelegate ----------
 
 TypeDelegate::TypeDelegate(int area, RegisterView *owner, QObject *parent)
     : QStyledItemDelegate(parent), m_area(area), m_owner(owner)
@@ -268,9 +254,9 @@ QWidget *TypeDelegate::createEditor(QWidget *parent,
                                     const QModelIndex &index) const
 {
     QComboBox *cb = new QComboBox(parent);
-    // 禁止改变位宽：仅列出与该行同宽的数据类型
+
     cb->addItems(dataTypeTextsFor(m_owner->rowType(m_area, index.row())));
-    // 选中即提交并关闭编辑器
+
     TypeDelegate *self = const_cast<TypeDelegate *>(this);
     connect(cb, QOverload<int>::of(&QComboBox::currentIndexChanged), self,
             [self, cb]{ self->commitData(cb); self->closeEditor(cb); });
@@ -281,7 +267,7 @@ void TypeDelegate::setEditorData(QWidget *editor, const QModelIndex &index) cons
 {
     QComboBox *cb = qobject_cast<QComboBox *>(editor);
     if (!cb) return;
-    // 屏蔽信号，避免初始化选项时误触发提交关闭
+
     cb->blockSignals(true);
     cb->setCurrentIndex(qMax(0, cb->findText(index.model()->data(index, Qt::EditRole).toString())));
     cb->blockSignals(false);
@@ -297,8 +283,6 @@ void TypeDelegate::setModelData(QWidget *editor, QAbstractItemModel *model,
     m_owner->commitType(m_area, index.row(), dataTypeFromText(txt));
 }
 
-// ---------- ByteOrderDelegate ----------
-
 ByteOrderDelegate::ByteOrderDelegate(int area, RegisterView *owner, QObject *parent)
     : QStyledItemDelegate(parent), m_area(area), m_owner(owner)
 {
@@ -309,9 +293,9 @@ QWidget *ByteOrderDelegate::createEditor(QWidget *parent,
                                          const QModelIndex &index) const
 {
     QComboBox *cb = new QComboBox(parent);
-    // 可选字节序由该行数据类型位宽决定
+
     cb->addItems(byteOrderTextsFor(m_owner->rowType(m_area, index.row())));
-    // 选中即提交并关闭编辑器
+
     ByteOrderDelegate *self = const_cast<ByteOrderDelegate *>(this);
     connect(cb, QOverload<int>::of(&QComboBox::currentIndexChanged), self,
             [self, cb]{ self->commitData(cb); self->closeEditor(cb); });
@@ -322,7 +306,7 @@ void ByteOrderDelegate::setEditorData(QWidget *editor, const QModelIndex &index)
 {
     QComboBox *cb = qobject_cast<QComboBox *>(editor);
     if (!cb) return;
-    // 屏蔽信号，避免初始化选项时误触发提交关闭
+
     cb->blockSignals(true);
     cb->setCurrentIndex(qMax(0, cb->findText(index.model()->data(index, Qt::EditRole).toString())));
     cb->blockSignals(false);
@@ -369,7 +353,7 @@ void RegisterView::doWrite(int area, QTableWidget *t, QPushButton *btn)
     qint64 val = 0;
     if (rd.type == TypeF32)
     {
-        // float32 按浮点解析，存入其 32 位比特模式
+
         float f = txt.toFloat(&ok);
         quint32 bits = 0;
         std::memcpy(&bits, &f, sizeof(bits));
@@ -393,7 +377,6 @@ void RegisterView::doWrite(int area, QTableWidget *t, QPushButton *btn)
     emit writeRequested(area, rd.protoAddr, rd.type, rd.byteOrder, val);
 }
 
-// 实时数据来自 RealtimeData 中转站转发的 dataChanged 信号
 void RegisterView::onReadResult(const ReadPoint &pt)
 {
     if (pt.areaIndex < 0 || pt.areaIndex > 3) return;
@@ -422,7 +405,7 @@ void RegisterView::onReadResult(const ReadPoint &pt)
         break;
 
     case ReadError:
-        // Modbus 异常码与错误描述显示在状态列，原始值列无有效数据
+
         st->setText(QString("错误:0x%1 %2")
                     .arg((quint8)pt.errValue, 2, 16, QLatin1Char('0'))
                     .arg(pt.errText));
@@ -431,7 +414,7 @@ void RegisterView::onReadResult(const ReadPoint &pt)
         raw->setText("—");
         break;
 
-    default: // ReadInvalid
+    default:
         st->setText("无效");
         st->setTextColor(Qt::red);
         raw->setText("");
@@ -451,7 +434,6 @@ void RegisterView::onWriteResult(int areaIndex, int protoAddr, bool ok, const QS
     if (btn)
         btn->setText(ok ? "成功" : "失败");
 
-    // 可写区(DO/AO)写入失败时弹框提示失败原因
     if (!ok && areaInfo(areaIndex).writable)
     {
         QMessageBox::warning(this, "写入失败",
@@ -462,7 +444,6 @@ void RegisterView::onWriteResult(int areaIndex, int protoAddr, bool ok, const QS
     }
 }
 
-// 双击进入设定值编辑态时，将写入按钮文本还原为“写入”
 void RegisterView::onItemDoubleClicked(QTableWidgetItem *item)
 {
     if (!item || item->column() != ColSet) return;
@@ -488,14 +469,14 @@ void RegisterView::setAddrHex(bool hex)
                 it->setText(addrText(m_rows[a][r].protoAddr));
 }
 
-void RegisterView::setRealtimeData(RealtimeData *data)
+void RegisterView::setRegisterData(RegisterData *data)
 {
     m_data = data;
 }
 
 QString RegisterView::valueText(DataType type, qint64 value) const
 {
-    // float32 始终按浮点显示，十六进制对其无意义
+
     if (type == TypeF32)
     {
         quint32 bits = (quint32)value;
@@ -594,7 +575,7 @@ void RegisterView::onDeleteRowsInArea(int area, QTableWidget *t)
     QList<int> rows;
     for (QTableWidgetItem *it : sel)
         if (!rows.contains(it->row())) rows.append(it->row());
-    std::sort(rows.begin(), rows.end(), std::greater<int>()); // 从后往前删
+    std::sort(rows.begin(), rows.end(), std::greater<int>());
     for (int r : rows)
     {
         t->removeRow(r);
@@ -607,14 +588,14 @@ void RegisterView::onClearArea(int area, QTableWidget *t)
 {
     if (area < 0 || !t || t->rowCount() == 0)
         return;
-    // 清空不可恢复，先确认
+
     if (QMessageBox::question(this, "清空列表",
                               QString("确定清空 %1 的全部点位吗？").arg(areaInfo(area).name),
                               QMessageBox::Yes | QMessageBox::No,
                               QMessageBox::No) != QMessageBox::Yes)
         return;
 
-    t->setRowCount(0);           // 移除全部行及行内控件
+    t->setRowCount(0);
     m_rows[area].clear();
-    rebuildPlan(area);           // 同步空读取计划给工作线程，停止轮询该区
+    rebuildPlan(area);
 }

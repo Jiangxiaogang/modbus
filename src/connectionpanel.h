@@ -9,7 +9,6 @@
 #include <QPushButton>
 #include <QGroupBox>
 
-//通道配置 + 协议配置
 class ConnectionPanel : public QWidget
 {
     Q_OBJECT
@@ -18,9 +17,10 @@ public:
     const ModbusConfig& getConfig();
 
 signals:
-    void connectClicked(ModbusConfig *config);
+
+    void connectClicked();
     void disconnectClicked();
-    void configChanged(const ModbusConfig &config);
+    void configChanged();
 
 public slots:
     void setConnected(bool connected);
@@ -61,4 +61,4 @@ private:
     QComboBox   *m_regFuncCombo;
 };
 
-#endif // CONNECTIONPANEL_H
+#endif
