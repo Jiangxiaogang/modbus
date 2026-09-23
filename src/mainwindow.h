@@ -15,13 +15,13 @@ class MainWindow : public QMainWindow
 {
     Q_OBJECT
 public:
-    explicit MainWindow(QWidget *parent = 0);
+    explicit MainWindow(QWidget *parent = nullptr);
+    ~MainWindow() override;
 
 private slots:
     void onConnectionState(bool connected);
     void onConnectError(const QString &msg);
     void onStats(quint32 tx, quint32 rx, quint32 err);
-    void showAbout(); // F1 弹出“关于”对话框
     // 桥接：工作线程读结果 -> 中转站 API
     void onWorkerReadResult(int areaIndex, int address, int status,
                             qint64 value, const QString &errText, qint64 errValue);

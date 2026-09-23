@@ -10,8 +10,8 @@ class ModbusClient : public QObject
 {
     Q_OBJECT
 public:
-    ModbusClient(QObject *parent = 0);
-    ~ModbusClient();
+    explicit ModbusClient(QObject *parent = nullptr);
+    ~ModbusClient() override;
 
     bool open(const ModbusConfig &cfg);
     // 热更新协议层参数(协议/从站/超时)，不重建传输层
@@ -25,19 +25,19 @@ public:
     // modbusErr 返回异常响应中的 Modbus 异常码(0x01..)，无异常时为 0
     bool transact(quint8 func, const QByteArray &txPdu,
                   QByteArray &rxPdu, QString &err,
-                  qint64 *txBytes = 0, qint64 *rxBytes = 0,
-                  quint8 *modbusErr = 0);
+                  qint64 *txBytes = nullptr, qint64 *rxBytes = nullptr,
+                  quint8 *modbusErr = nullptr);
 
 signals:
-    // 完整传输帧（含从站/校验/MBAP）收发通知，供通信日志使用
-    void frameSent(const QByteArray &frame);
-    void frameReceived(const QByteArray &frame);
+    // 完整传输帧（含从站/校验/MBAP）收发通知，携带请求功能码供监控分类
+    void frameSent(const QByteArray &frame, quint8 func);
+    void frameReceived(const QByteArray &frame, quint8 func);
 
 private:
     ITransport *buildTransport(const ModbusConfig &cfg);
 
     ModbusConfig  m_cfg;
-    ITransport   *m_transport;
+    ITransport   *m_transport = nullptr;
     QString       m_lastErr;
 };
 

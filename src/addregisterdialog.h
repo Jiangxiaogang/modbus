@@ -3,23 +3,23 @@
 
 #include <QDialog>
 
+class QLineEdit;
+class QSpinBox;
+class QPushButton;
+
 // 快速添加寄存器：输入起始地址与数量
 class AddRegisterDialog : public QDialog
 {
     Q_OBJECT
 public:
-    AddRegisterDialog(int areaIndex, QWidget *parent = 0);
+    explicit AddRegisterDialog(int areaIndex, QWidget *parent = nullptr);
     int startAddr() const;  // 起始地址 (0-65535)
     int count() const;      // 数量
 
-private slots:
-    void validate();
-
 private:
-    int m_areaIndex;
-    class QLineEdit   *m_addrEdit;
-    class QSpinBox    *m_countSpin;
-    class QPushButton *m_okBtn;
+    QLineEdit   *m_addrEdit;
+    QSpinBox    *m_countSpin;
+    QPushButton *m_okBtn;
 };
 
 #endif // ADDREGISTERDIALOG_H

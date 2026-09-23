@@ -1,32 +1,28 @@
 #include "addregisterdialog.h"
-#include "modbusdefs.h"
 #include <QSpinBox>
 #include <QLineEdit>
 #include <QPushButton>
-#include <QLabel>
 #include <QFormLayout>
 #include <QDialogButtonBox>
+#include <QVBoxLayout>
 
 // 解析用户输入的寄存器地址：支持十进制与 0x/0X 开头的十六进制
 static bool parseAddr(const QString &text, int *addr)
 {
     QString s = text.trimmed();
     bool ok = false;
-    int v = 0;
-    if (s.startsWith("0x", Qt::CaseInsensitive))
-        v = s.mid(2).toInt(&ok, 16);
-    else
-        v = s.toInt(&ok, 10);
+    int v = s.startsWith("0x", Qt::CaseInsensitive) ? s.mid(2).toInt(&ok, 16)
+                                                    : s.toInt(&ok, 10);
     if (!ok || v < 0 || v > 65535)
         return false;
     if (addr) *addr = v;
     return true;
 }
 
-AddRegisterDialog::AddRegisterDialog(int areaIndex, QWidget *parent)
-    : QDialog(parent), m_areaIndex(areaIndex)
+AddRegisterDialog::AddRegisterDialog(int, QWidget *parent)
+    : QDialog(parent)
 {
-    setWindowTitle(QString("快速添加"));
+    setWindowTitle("快速添加");
     setModal(true);
 
     m_addrEdit = new QLineEdit("0", this);
@@ -45,21 +41,17 @@ AddRegisterDialog::AddRegisterDialog(int areaIndex, QWidget *parent)
     QDialogButtonBox *bbox = new QDialogButtonBox;
     bbox->addButton(m_okBtn, QDialogButtonBox::AcceptRole);
     bbox->addButton(cancel, QDialogButtonBox::RejectRole);
-    connect(bbox, SIGNAL(accepted()), this, SLOT(accept()));
-    connect(bbox, SIGNAL(rejected()), this, SLOT(reject()));
-    connect(m_addrEdit, SIGNAL(textChanged(QString)), this, SLOT(validate()));
+    connect(bbox, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(bbox, &QDialogButtonBox::rejected, this, &QDialog::reject);
+
+    // 地址非法时禁用确定按钮，避免传入越界地址
+    connect(m_addrEdit, &QLineEdit::textChanged, this,
+            [this]{ m_okBtn->setEnabled(parseAddr(m_addrEdit->text(), nullptr)); });
+    m_okBtn->setEnabled(parseAddr(m_addrEdit->text(), nullptr));
 
     QVBoxLayout *v = new QVBoxLayout(this);
     v->addLayout(form);
     v->addWidget(bbox);
-
-    validate();
-}
-
-void AddRegisterDialog::validate()
-{
-    // 地址非法时禁用确定按钮，避免传入越界地址
-    m_okBtn->setEnabled(parseAddr(m_addrEdit->text(), 0));
 }
 
 int AddRegisterDialog::startAddr() const

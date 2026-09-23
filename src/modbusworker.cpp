@@ -1,37 +1,30 @@
 #include "modbusworker.h"
-#include "modbusclient.h"
+#include "modbusdevice.h"
+#include "commmonitor.h"
 #include "modbuscodec.h"
 #include "modbusdefs.h"
 #include <QTimer>
-#include <QTime>
-#include <QMap>
-#include <QtAlgorithms>
+#include <QVector>
+#include <algorithm>
 
 ModbusWorker::ModbusWorker(QObject *parent)
     : QObject(parent)
-    , m_client(0)
-    , m_timer(0)
-    , m_tx(0)
-    , m_rx(0)
-    , m_errCount(0)
-    , m_logIsWrite(false)
 {
+    m_device  = new ModbusDevice(this);
+    m_monitor = new CommMonitor(this);
+    // 设备帧/失败事件 -> 监控器（同线程直连）
+    connect(m_device, &ModbusDevice::frameSent, m_monitor, &CommMonitor::onFrameSent);
+    connect(m_device, &ModbusDevice::frameReceived, m_monitor, &CommMonitor::onFrameReceived);
+    connect(m_device, &ModbusDevice::operationFailed, m_monitor, &CommMonitor::onOperationError);
 }
 
-ModbusWorker::~ModbusWorker()
-{
-    if (m_client)
-    {
-        m_client->close();
-        delete m_client;
-    }
-}
+ModbusWorker::~ModbusWorker() = default;
 
 void ModbusWorker::setConfig(const ModbusConfig &cfg)
 {
     QMutexLocker lock(&m_mutex);
     m_cfg = cfg;
-    if (m_timer && m_client)
+    if (m_timer)
         m_timer->setInterval(qMax(50, m_cfg.pollInterval));
 }
 
@@ -47,68 +40,47 @@ void ModbusWorker::applyConfig(const ModbusConfig &cfg)
     m_cfg.coilWriteFunc   = cfg.coilWriteFunc;
     m_cfg.regWriteFunc    = cfg.regWriteFunc;
 
-    if (m_client)
-        m_client->setConfig(m_cfg);
+    m_device->setConfig(m_cfg);
     if (m_timer)
         m_timer->setInterval(qMax(50, m_cfg.pollInterval));
-    if (m_client)
-        emit logInfo(QTime::currentTime().toString("hh:mm:ss.zzz"), "协议配置已更新");
+    if (m_device->isConnected())
+        m_monitor->reportInfo("协议配置已更新");
 }
 
 void ModbusWorker::connectDevice(ModbusConfig *cfg)
 {
     QMutexLocker lock(&m_mutex);
     m_cfg = *cfg;
-    if (m_client)
-    {
-        m_client->close();
-        delete m_client;
-        m_client = 0;
-    }
-    m_client = new ModbusClient(this);
-    m_tx = m_rx = m_errCount = 0;
-    // 帧级收发 -> 通信日志（同线程直连，带读/写标签转发）
-    connect(m_client, SIGNAL(frameSent(QByteArray)), this, SLOT(onFrameSent(QByteArray)));
-    connect(m_client, SIGNAL(frameReceived(QByteArray)), this, SLOT(onFrameReceived(QByteArray)));
+    m_monitor->resetStats();
 
-    if (!m_client->open(m_cfg))
+    if (!m_device->connectDevice(m_cfg))
     {
-        QString e = m_client->errorString();
-        delete m_client;
-        m_client = 0;
+        QString e = m_device->errorString();
         emit connectionStateChanged(false);
         emit connectError(e);
-        emit statsUpdated(0, 0, 0);
-        emit logError(QTime::currentTime().toString("hh:mm:ss.zzz"),
-                      "连接失败: " + e);
+        m_monitor->reportError("连接失败: " + e);
         return;
     }
     if (!m_timer)
     {
         m_timer = new QTimer(this);
-        connect(m_timer, SIGNAL(timeout()), this, SLOT(doPoll()));
+        connect(m_timer, &QTimer::timeout, this, &ModbusWorker::doPoll);
     }
     m_timer->setInterval(qMax(50, m_cfg.pollInterval));
     m_timer->start();
     emit connectionStateChanged(true);
-    emit statsUpdated(0, 0, 0);
-    emit logInfo(QTime::currentTime().toString("hh:mm:ss.zzz"), "连接成功");
+    m_monitor->reportInfo("连接成功");
 }
 
 void ModbusWorker::disconnectDevice()
 {
     QMutexLocker lock(&m_mutex);
     if (m_timer) m_timer->stop();
-    const bool wasConnected = (m_client != 0);
-    if (m_client)
-    {
-        m_client->close();
-        delete m_client;
-        m_client = 0;
-    }
+    const bool wasConnected = m_device->isConnected();
+    m_device->disconnectDevice();
     emit connectionStateChanged(false);
     if (wasConnected)
-        emit logInfo(QTime::currentTime().toString("hh:mm:ss.zzz"), "已断开连接");
+        m_monitor->reportInfo("已断开连接");
 }
 
 void ModbusWorker::setAreaPlan(int areaIndex, QList<RegPlanItem> *items)
@@ -122,33 +94,30 @@ void ModbusWorker::setAreaPlan(int areaIndex, QList<RegPlanItem> *items)
 void ModbusWorker::doPoll()
 {
     QMutexLocker lock(&m_mutex);
-    if (!m_client || !m_client->isOpen())
+    if (!m_device->isConnected())
         return;
     for (int a = 0; a < 4; ++a)
     {
-        if (m_plans[a].isEmpty())
-            continue;
-        runReadArea(a, m_plans[a]);
+        if (!m_plans[a].isEmpty())
+            runReadArea(a, m_plans[a]);
     }
-    emit statsUpdated(m_tx, m_rx, m_errCount);
 }
 
 void ModbusWorker::runReadArea(int areaIndex, const QList<RegPlanItem> &items)
 {
-    m_logIsWrite = false; // 读事务，供日志标签区分
     const AreaInfo &info = areaInfo(areaIndex);
     int maxQ = (info.readFunc == 1 || info.readFunc == 2) ? 2000 : 125;
 
     // 计划内地址升序排列，供连续段合并使用
     QList<int> addrs;
-    foreach (const RegPlanItem &it, items)
+    for (const RegPlanItem &it : items)
         addrs.append(it.address);
-    qSort(addrs);
+    std::sort(addrs.begin(), addrs.end());
 
     if (m_cfg.readMode)
     {
-        // 批量模式：按计划读取，计划内连续地址合并为一次读取，
-        // 非连续地址单独读取；连续段超过单次读取上限时分片
+        // 批量模式：计划内连续地址合并为一次读取，非连续地址单独读取；
+        // 连续段超过单次读取上限时分片
         int i = 0;
         while (i < addrs.size())
         {
@@ -164,7 +133,7 @@ void ModbusWorker::runReadArea(int areaIndex, const QList<RegPlanItem> &items)
     else
     {
         // 单点模式：计划内地址逐个读取
-        foreach (int addr, addrs)
+        for (int addr : addrs)
             readChunk(areaIndex, addr, 1, items);
     }
 }
@@ -173,91 +142,61 @@ void ModbusWorker::readChunk(int areaIndex, int start, int cnt,
                              const QList<RegPlanItem> &items)
 {
     const AreaInfo &info = areaInfo(areaIndex);
+    const bool bitArea = (info.readFunc == 1 || info.readFunc == 2);
 
-    QByteArray tx;
-    tx.append((char)((start >> 8) & 0xFF));
-    tx.append((char)(start & 0xFF));
-    tx.append((char)((cnt >> 8) & 0xFF));
-    tx.append((char)(cnt & 0xFF));
-
-    QByteArray rx;
     QString err;
     quint8 mbErr = 0;
-    bool ok = m_client->transact((quint8)info.readFunc, tx, rx, err, 0, 0, &mbErr);
-    if (!ok) m_errCount++;
+    QVector<qint64> values;
+    bool ok;
+    if (bitArea)
+    {
+        QVector<bool> bits;
+        ok = m_device->readBits(info.readFunc, start, cnt, bits, err, &mbErr);
+        for (bool b : bits)
+            values.append(b ? 1 : 0);
+    }
+    else
+    {
+        QVector<quint16> regs;
+        ok = m_device->readRegisters(info.readFunc, start, cnt, regs, err, &mbErr);
+        for (quint16 r : regs)
+            values.append(r);
+    }
 
     if (!ok)
     {
         // 区分超时 / 设备异常 / 其它无效；只标记本分片覆盖的地址，
         // 其它分片各自独立处理，避免连累通信正常的寄存器
-        int status;
+        int status = ReadInvalid;
         qint64 errValue = 0;
-        QString errText;
+        QString errText = err;
         if (mbErr != 0)
         {
             status   = ReadError;
             errValue = mbErr;
             errText  = ModbusCodec::exceptionText(mbErr);
         }
-        else if (err == "响应超时")
+        else if (err.contains("超时"))
         {
-            status  = ReadTimeout;
-            errText = err;
+            status = ReadTimeout;
         }
-        else
+        for (const RegPlanItem &it : items)
         {
-            status  = ReadInvalid;
-            errText = err;
-        }
-        emit logError(QTime::currentTime().toString("hh:mm:ss.zzz"), errText);
-        const int chunkEnd = start + cnt;
-        foreach (const RegPlanItem &it, items)
-        {
-            if (it.address < start || it.address >= chunkEnd)
-                continue;  // 其它分片各自独立处理
-            emit readResult(areaIndex, it.address, status, 0, errText, errValue);
+            if (it.address >= start && it.address < start + cnt)
+                emit readResult(areaIndex, it.address, status, 0, errText, errValue);
         }
         return;
     }
 
-    // 解析响应，建立地址->值 映射
-    QMap<int, qint64> values;
-    if (rx.size() < 1)
-        return;
-    int byteCount = (quint8)rx[0];
-    const char *data = rx.constData() + 1;
-    if (info.readFunc == 1 || info.readFunc == 2)
-    {
-        for (int i = 0; i < cnt; ++i)
-        {
-            int addr = start + i;
-            int bit = (data[i / 8] >> (i % 8)) & 0x01;
-            values[addr] = bit;
-        }
-    }
-    else
-    {
-        int n = byteCount / 2;
-        for (int i = 0; i < cnt && i < n; ++i)
-        {
-            int addr = start + i;
-            int hi = (quint8)data[2 * i];
-            int lo = (quint8)data[2 * i + 1];
-            quint16 word = (quint16)((hi << 8) | lo);
-            values[addr] = word;
-        }
-    }
     // 仅处理本分片所覆盖的地址，其它地址由覆盖它的分片负责
-    const int chunkEnd = start + cnt;
-    foreach (const RegPlanItem &it, items)
+    for (const RegPlanItem &it : items)
     {
-        if (it.address < start || it.address >= chunkEnd)
+        if (it.address < start || it.address >= start + cnt)
             continue;
-
-        QMap<int, qint64>::const_iterator itv = values.find(it.address);
-        if (itv != values.end())
+        int idx = it.address - start;
+        if (idx < values.size())
         {
-            qint64 v = itv.value();
+            qint64 v = values[idx];
             if (it.type == TypeS16)
                 v = (qint16)(quint16)v;
             emit readResult(areaIndex, it.address, ReadOk, v, QString(), 0);
@@ -272,88 +211,17 @@ void ModbusWorker::readChunk(int areaIndex, int start, int cnt,
 void ModbusWorker::writeRegister(int areaIndex, int address, DataType type, qint64 value)
 {
     QMutexLocker lock(&m_mutex);
-    m_logIsWrite = true; // 写事务，供日志标签区分
-    if (!m_client || !m_client->isOpen())
+    if (!m_device->isConnected())
     {
         emit writeResult(areaIndex, address, false, "未连接");
-        emit logError(QTime::currentTime().toString("hh:mm:ss.zzz"), "未连接");
+        m_monitor->reportError("未连接");
         return;
     }
-    const AreaInfo &info = areaInfo(areaIndex);
-    Q_UNUSED(info);
-    QByteArray tx;
-    quint8 func = 0;
+    Q_UNUSED(type);
+
     QString err;
-    bool ok = false;
-
-    if (areaIndex == 0)                   // 线圈
-    {
-        func = (quint8)m_cfg.coilWriteFunc;
-        if (func == 15)
-        {
-            quint8 b = value ? 0x01 : 0x00;
-            tx.append((char)((address >> 8) & 0xFF));
-            tx.append((char)(address & 0xFF));
-            tx.append((char)0x00);
-            tx.append((char)0x01);
-            tx.append((char)0x01);
-            tx.append((char)b);
-        }
-        else     // 05
-        {
-            func = 5;
-            quint8 hi = value ? 0xFF : 0x00;
-            tx.append((char)((address >> 8) & 0xFF));
-            tx.append((char)(address & 0xFF));
-            tx.append((char)hi);
-            tx.append((char)0x00);
-        }
-        QByteArray rx;
-        ok = m_client->transact(func, tx, rx, err, 0, 0);
-    }
-    else                                  // 保持寄存器
-    {
-        func = (quint8)m_cfg.regWriteFunc;
-        quint16 v = (quint16)value;
-        if (func == 16)
-        {
-            tx.append((char)((address >> 8) & 0xFF));
-            tx.append((char)(address & 0xFF));
-            tx.append((char)0x00);
-            tx.append((char)0x01); // 数量=1
-            tx.append((char)0x02);                       // 字节数=2
-            tx.append((char)((v >> 8) & 0xFF));
-            tx.append((char)(v & 0xFF));
-        }
-        else     // 06
-        {
-            func = 6;
-            tx.append((char)((address >> 8) & 0xFF));
-            tx.append((char)(address & 0xFF));
-            tx.append((char)((v >> 8) & 0xFF));
-            tx.append((char)(v & 0xFF));
-        }
-        QByteArray rx;
-        ok = m_client->transact(func, tx, rx, err, 0, 0);
-    }
-    if (!ok)
-        m_errCount++;
-    if (!ok)
-        emit logError(QTime::currentTime().toString("hh:mm:ss.zzz"), err);
+    bool ok = (areaIndex == 0)
+              ? m_device->writeCoil(address, value != 0, m_cfg.coilWriteFunc, err)
+              : m_device->writeRegister(address, (quint16)value, m_cfg.regWriteFunc, err);
     emit writeResult(areaIndex, address, ok, ok ? QString() : err);
-    emit statsUpdated(m_tx, m_rx, m_errCount);
-}
-
-void ModbusWorker::onFrameSent(const QByteArray &frame)
-{
-    ++m_tx; // 报文计数：每实际发出一帧计 1
-    emit logTx(m_logIsWrite, QTime::currentTime().toString("hh:mm:ss.zzz"),
-               QString::fromLatin1(ModbusCodec::toHex(frame)));
-}
-
-void ModbusWorker::onFrameReceived(const QByteArray &frame)
-{
-    ++m_rx; // 报文计数：每实际收到一帧计 1
-    emit logRx(m_logIsWrite, QTime::currentTime().toString("hh:mm:ss.zzz"),
-               QString::fromLatin1(ModbusCodec::toHex(frame)));
 }

@@ -1,9 +1,7 @@
 #include "tcptransport.h"
 
 TcpTransport::TcpTransport(const QString &ip, int port)
-    : m_ip(ip),
-      m_port(port),
-      m_tcp(0)
+    : m_ip(ip), m_port(port)
 {
 }
 
@@ -26,28 +24,23 @@ bool TcpTransport::open()
 
 void TcpTransport::close()
 {
-    if (m_tcp)
-    {
-        m_tcp->close();
-        delete m_tcp;
-        m_tcp = 0;
-    }
+    delete m_tcp;
+    m_tcp = nullptr;
 }
 
 bool TcpTransport::isOpen() const
 {
-    return m_tcp != 0 && m_tcp->state() == QAbstractSocket::ConnectedState;
+    return m_tcp && m_tcp->state() == QAbstractSocket::ConnectedState;
 }
 
 qint64 TcpTransport::write(const char *data, qint64 len)
 {
-    if (!m_tcp) return -1;
-    return m_tcp->write(data, len);
+    return m_tcp ? m_tcp->write(data, len) : -1;
 }
 
 QByteArray TcpTransport::read(int timeoutMs)
 {
-    if(!m_tcp->waitForReadyRead(timeoutMs))
+    if (!m_tcp->waitForReadyRead(timeoutMs))
     {
         m_err = "TCP 接收超时";
         return QByteArray();

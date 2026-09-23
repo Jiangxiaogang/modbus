@@ -1,17 +1,43 @@
 #include "serialtransport.h"
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
+#include <QSerialPort>
+#include <QThread>
+
+static QSerialPort::DataBits toDataBits(int bits)
+{
+    switch (bits)
+    {
+    case 5: return QSerialPort::Data5;
+    case 6: return QSerialPort::Data6;
+    case 7: return QSerialPort::Data7;
+    default: return QSerialPort::Data8;
+    }
+}
+
+static QSerialPort::StopBits toStopBits(int bits)
+{
+    switch (bits)
+    {
+    case 20: return QSerialPort::TwoStop;
+    case 15: return QSerialPort::OneAndHalfStop;
+    default: return QSerialPort::OneStop;
+    }
+}
+
+static QSerialPort::Parity toParity(int parity)
+{
+    switch (parity)
+    {
+    case 1: return QSerialPort::OddParity;  // 奇校验
+    case 2: return QSerialPort::EvenParity; // 偶校验
+    default: return QSerialPort::NoParity;  // 无校验
+    }
+}
 
 SerialTransport::SerialTransport(const QString &portName, int baudRate,
                                  int dataBits, int stopBits, int parity)
     : m_portName(portName), m_baudRate(baudRate), m_dataBits(dataBits)
-    , m_stopBits(stopBits), m_parity(parity), m_handle(INVALID_HANDLE_VALUE)
+    , m_stopBits(stopBits), m_parity(parity)
 {
 }
 
@@ -20,114 +46,62 @@ SerialTransport::~SerialTransport()
     close();
 }
 
+int SerialTransport::charIntervalMs() const
+{
+    const double charBits = (m_parity == 0) ? 11.0 : 12.0; // 8N1 / 8E1 起止位
+    int ms = (int)(charBits * 1000.0 / (double)m_baudRate * 3.5);
+    return ms < 1 ? 1 : ms;
+}
+
 bool SerialTransport::open()
 {
-    QString name = m_portName;
-    if (!name.startsWith("\\\\.\\"))
-        name = "\\\\.\\" + name;
-    HANDLE h = CreateFileA(name.toLocal8Bit().constData(),
-                           GENERIC_READ | GENERIC_WRITE,
-                           0, NULL, OPEN_EXISTING, 0, NULL);
-    if (h == INVALID_HANDLE_VALUE)
+    m_serial = new QSerialPort;
+    m_serial->setPortName(m_portName);
+    m_serial->setBaudRate(m_baudRate);
+    m_serial->setDataBits(toDataBits(m_dataBits));
+    m_serial->setStopBits(toStopBits(m_stopBits));
+    m_serial->setParity(toParity(m_parity));
+    m_serial->setFlowControl(QSerialPort::NoFlowControl);
+    if (!m_serial->open(QIODevice::ReadWrite))
     {
-        m_err = QString("打开串口失败 (0x%1)").arg((int)GetLastError(), 0, 16);
+        m_err = QString("打开串口失败: %1").arg(m_serial->errorString());
+        delete m_serial;
+        m_serial = nullptr;
         return false;
     }
-    m_handle = h;
-
-    DCB dcb;
-    memset(&dcb, 0, sizeof(dcb));
-    dcb.DCBlength = sizeof(dcb);
-    dcb.BaudRate = m_baudRate;
-    dcb.ByteSize = (BYTE)m_dataBits;
-    switch (m_stopBits)
-    {
-    case 20:
-        dcb.StopBits = TWOSTOPBITS;
-        break;
-    case 15:
-        dcb.StopBits = ONE5STOPBITS;
-        break;
-    default:
-        dcb.StopBits = ONESTOPBIT;
-        break;
-    }
-    switch (m_parity)
-    {
-    case 1:  // 奇校验
-        dcb.Parity = ODDPARITY;
-        dcb.fParity = TRUE;
-        break;
-    case 2:  // 偶校验
-        dcb.Parity = EVENPARITY;
-        dcb.fParity = TRUE;
-        break;
-    default: // 0 无校验
-        dcb.Parity = NOPARITY;
-        dcb.fParity = FALSE;
-        break;
-    }
-    dcb.fBinary        = TRUE;
-    dcb.fAbortOnError  = FALSE;
-    dcb.fDtrControl    = DTR_CONTROL_ENABLE;
-    dcb.fRtsControl    = RTS_CONTROL_ENABLE;
-    if (!SetCommState(h, &dcb))
-    {
-        m_err = "配置串口参数失败";
-        close();
-        return false;
-    }
-
-    // 3.5 字符时间间隔（用于 RTU/ASCII 帧边界检测）
-    double charBits = 11.0; // 8N1
-    if (m_parity != 0) charBits = 12.0;
-    double charMs = (charBits * 1000.0) / (double)m_baudRate;
-    DWORD interval = (DWORD)(charMs * 3.5);
-    if (interval < 1) interval = 1;
-
-    COMMTIMEOUTS ct;
-    memset(&ct, 0, sizeof(ct));
-    ct.ReadIntervalTimeout         = interval;     // 字符间超时 -> 帧结束
-    ct.ReadTotalTimeoutMultiplier  = 0;
-    ct.ReadTotalTimeoutConstant    = 1000;         // 占位，open 时未知超时
-    ct.WriteTotalTimeoutMultiplier = 0;
-    ct.WriteTotalTimeoutConstant   = 1000;
-    SetCommTimeouts(h, &ct);
-
-    PurgeComm(h, PURGE_RXCLEAR | PURGE_TXCLEAR);
+    m_serial->clear(QSerialPort::AllDirections);
     return true;
 }
 
 void SerialTransport::close()
 {
-    if (m_handle != INVALID_HANDLE_VALUE)
+    if (m_serial)
     {
-        PurgeComm((HANDLE)m_handle, PURGE_RXCLEAR | PURGE_TXCLEAR);
-        CloseHandle((HANDLE)m_handle);
-        m_handle = INVALID_HANDLE_VALUE;
+        m_serial->close();
+        delete m_serial;
+        m_serial = nullptr;
     }
 }
 
 bool SerialTransport::isOpen() const
 {
-    return m_handle != INVALID_HANDLE_VALUE;
+    return m_serial && m_serial->isOpen();
 }
 
 qint64 SerialTransport::write(const char *data, qint64 len)
 {
     if (!isOpen()) return -1;
-    PurgeComm((HANDLE)m_handle, PURGE_RXCLEAR); // 清掉旧数据
-    DWORD written = 0;
-    if (!WriteFile((HANDLE)m_handle, data, (DWORD)len, &written, NULL))
+    m_serial->clear(QSerialPort::Input); // 清掉旧数据
+    qint64 w = m_serial->write(data, len);
+    if (w < 0)
     {
-        m_err = "串口写入失败";
+        m_err = "串口写入失败: " + m_serial->errorString();
         return -1;
     }
+    m_serial->waitForBytesWritten(1000);
     // RTU 发送后等待 3.5 字符时间，保证帧间隔
-    double charBits = (m_parity == 0) ? 11.0 : 12.0;
-    int ms = (int)(charBits * 1000.0 / (double)m_baudRate * 3.5) + 1;
-    Sleep(ms);
-    return (qint64)written;
+    QThread::msleep(charIntervalMs());
+    return w;
 }
 
 QByteArray SerialTransport::read(int timeoutMs)
@@ -135,41 +109,13 @@ QByteArray SerialTransport::read(int timeoutMs)
     QByteArray buf;
     if (!isOpen())
         return buf;
-    HANDLE h = (HANDLE)m_handle;
-
-    COMMTIMEOUTS ct;
-    memset(&ct, 0, sizeof(ct));
-    double charBits = (m_parity == 0) ? 11.0 : 12.0;
-    double charMs = (charBits * 1000.0) / (double)m_baudRate;
-    DWORD interval = (DWORD)(charMs * 3.5);
-    if (interval < 1) interval = 1;
-    ct.ReadIntervalTimeout         = interval;
-    ct.ReadTotalTimeoutMultiplier  = 0;
-    ct.ReadTotalTimeoutConstant    = (DWORD)timeoutMs;
-    SetCommTimeouts(h, &ct);
-
-    DWORD start = GetTickCount();
-    while ((int)(GetTickCount() - start) < timeoutMs + 50)
-    {
-        char tmp[256];
-        DWORD got = 0;
-        if (!ReadFile(h, tmp, sizeof(tmp), &got, NULL))
-        {
-            m_err = "串口读取失败";
-            break;
-        }
-        if (got == 0)
-        {
-            // 发生间隔超时，说明一帧已结束
-            if (!buf.isEmpty())
-                break;
-            // 还没读到任何数据且超时 -> 返回空
-            if ((int)(GetTickCount() - start) >= timeoutMs)
-                break;
-            continue;
-        }
-        buf.append(tmp, (int)got);
-    }
+    if (!m_serial->waitForReadyRead(timeoutMs))
+        return buf; // 超时无数据
+    buf.append(m_serial->readAll());
+    // 继续收，直到超过 3.5 字符间隔无新数据，即认为一帧结束
+    const int interval = charIntervalMs();
+    while (m_serial->waitForReadyRead(interval))
+        buf.append(m_serial->readAll());
     return buf;
 }
 

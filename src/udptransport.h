@@ -12,19 +12,19 @@ class UdpTransport : public QObject, public ITransport
     Q_OBJECT
 public:
     UdpTransport(const QString &ip, int port);
-    ~UdpTransport();
+    ~UdpTransport() override;
 
-    bool open();
-    void close();
-    bool isOpen() const;
-    qint64 write(const char *data, qint64 len);
-    QByteArray read(int timeoutMs);
-    QString errorString() const;
+    bool open() override;
+    void close() override;
+    bool isOpen() const override;
+    qint64 write(const char *data, qint64 len) override;
+    QByteArray read(int timeoutMs) override;
+    QString errorString() const override;
 
 private:
     QString     m_ip;
     int         m_port;
-    QUdpSocket *m_udp;
+    QUdpSocket *m_udp = nullptr;
     QString     m_err;
 };
 

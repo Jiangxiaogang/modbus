@@ -3,7 +3,6 @@
 
 #include "modbusdefs.h"
 #include <QWidget>
-#include <QStringList>
 #include <QComboBox>
 #include <QLineEdit>
 #include <QSpinBox>
@@ -15,7 +14,7 @@ class ConnectionPanel : public QWidget
 {
     Q_OBJECT
 public:
-    explicit ConnectionPanel(QWidget *parent = 0);
+    explicit ConnectionPanel(QWidget *parent = nullptr);
     const ModbusConfig& getConfig();
 
 signals:
@@ -27,7 +26,6 @@ public slots:
     void setConnected(bool connected);
 
 private slots:
-    void onConnChanged(int idx);
     void onConnectButton();
     void onProtocolChanged();
 
@@ -37,6 +35,7 @@ private:
     void setWidgetEnabled(bool enabled);
     void setTransportEnabled(bool enabled);
     void setProtocolEnabled(bool enabled);
+
     bool         m_connected;
     ModbusConfig m_config;
 

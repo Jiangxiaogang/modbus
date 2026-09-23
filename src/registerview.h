@@ -11,6 +11,7 @@ class QTableWidget;
 class QTableWidgetItem;
 class QStyleOptionViewItem;
 class QModelIndex;
+class QPushButton;
 class RegisterView;
 class RealtimeData;
 
@@ -20,16 +21,13 @@ class TypeDelegate : public QStyledItemDelegate
 {
     Q_OBJECT
 public:
-    TypeDelegate(int area, RegisterView *owner, QObject *parent = 0);
+    TypeDelegate(int area, RegisterView *owner, QObject *parent = nullptr);
 
     QWidget *createEditor(QWidget *parent, const QStyleOptionViewItem &option,
-                          const QModelIndex &index) const;
-    void setEditorData(QWidget *editor, const QModelIndex &index) const;
+                          const QModelIndex &index) const override;
+    void setEditorData(QWidget *editor, const QModelIndex &index) const override;
     void setModelData(QWidget *editor, QAbstractItemModel *model,
-                      const QModelIndex &index) const;
-
-private slots:
-    void commitAndCloseEditor();
+                      const QModelIndex &index) const override;
 
 private:
     int           m_area;
@@ -51,7 +49,7 @@ class RegisterView : public QWidget
 {
     Q_OBJECT
 public:
-    explicit RegisterView(QWidget *parent = 0);
+    explicit RegisterView(QWidget *parent = nullptr);
 
     // 类型编辑提交回调（由 TypeDelegate 调用）：更新点位类型并同步读取计划
     void commitType(int area, int row, DataType tp);
@@ -70,11 +68,8 @@ public slots:
     void onWriteResult(int areaIndex, int protoAddr, bool ok, const QString &msg);
 
 private slots:
-    void onCustomContextMenu(const QPoint &pos);
     void onNameChanged(QTableWidgetItem *item);
     void onItemDoubleClicked(QTableWidgetItem *item);
-    void onWriteClicked();
-    void onTabChanged(int index);
 
 private:
     void setupTab(int areaIndex);
@@ -87,6 +82,8 @@ private:
     void onQuickAddInArea(int area);
     void onDeleteRowsInArea(int area, QTableWidget *t);
     void onClearArea(int area, QTableWidget *t);
+    void showAreaMenu(QTableWidget *t, int area, const QPoint &pos);
+    void doWrite(int area, QTableWidget *t, QPushButton *btn);
     QString addrText(int protoAddr) const;  // 按当前格式显示协议地址
     void setAddrHex(bool hex);              // 切换地址格式并刷新所有区
     QString valueText(qint64 value) const;  // 按当前格式显示数值
@@ -103,7 +100,7 @@ private:
     QList<RowData>     m_rows[4];
     bool               m_hexAddr;  // 地址列格式：true=16进制 false=10进制
     bool               m_hexValue; // 原始值格式：true=16进制 false=10进制
-    RealtimeData      *m_data;     // 实时数据中转站，切换数值格式时读取最新值
+    RealtimeData      *m_data = nullptr; // 实时数据中转站，切换数值格式时读取最新值
 };
 
 #endif // REGISTERVIEW_H

@@ -1,11 +1,7 @@
 #include "udptransport.h"
-#include "modbuscodec.h"
-#include <QUdpSocket>
 
 UdpTransport::UdpTransport(const QString &ip, int port)
-    : m_ip(ip)
-    , m_port(port)
-    , m_udp(0)
+    : m_ip(ip), m_port(port)
 {
 }
 
@@ -28,17 +24,13 @@ bool UdpTransport::open()
 
 void UdpTransport::close()
 {
-    if (m_udp)
-    {
-        m_udp->close();
-        delete m_udp;
-        m_udp = 0;
-    }
+    delete m_udp;
+    m_udp = nullptr;
 }
 
 bool UdpTransport::isOpen() const
 {
-    return m_udp != 0;
+    return m_udp != nullptr;
 }
 
 qint64 UdpTransport::write(const char *data, qint64 len)

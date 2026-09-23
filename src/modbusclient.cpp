@@ -5,7 +5,7 @@
 #include "udptransport.h"
 
 ModbusClient::ModbusClient(QObject *parent)
-    : QObject(parent), m_transport(0)
+    : QObject(parent)
 {
 }
 
@@ -22,7 +22,7 @@ ITransport *ModbusClient::buildTransport(const ModbusConfig &cfg)
         return new TcpTransport(cfg.netAddr, cfg.netPort);
     if (cfg.netType == NetworkUDP)
         return new UdpTransport(cfg.netAddr, cfg.netPort);
-    return NULL;
+    return nullptr;
 }
 
 bool ModbusClient::open(const ModbusConfig &cfg)
@@ -34,7 +34,7 @@ bool ModbusClient::open(const ModbusConfig &cfg)
     {
         m_lastErr = m_transport->errorString();
         delete m_transport;
-        m_transport = 0;
+        m_transport = nullptr;
         return false;
     }
     return true;
@@ -51,7 +51,7 @@ void ModbusClient::close()
     {
         m_transport->close();
         delete m_transport;
-        m_transport = 0;
+        m_transport = nullptr;
     }
 }
 
@@ -79,8 +79,7 @@ bool ModbusClient::transact(quint8 func, const QByteArray &txPdu,
         return false;
     }
 
-    QByteArray frame = ModbusCodec::encode(m_cfg.protocol, (quint8)m_cfg.slave,
-                                           func, txPdu);
+    QByteArray frame = ModbusCodec::encode(m_cfg.protocol, (quint8)m_cfg.slave, func, txPdu);
     qint64 w = m_transport->write(frame.constData(), frame.size());
     if (w < 0)
     {
@@ -88,7 +87,7 @@ bool ModbusClient::transact(quint8 func, const QByteArray &txPdu,
         return false;
     }
     if (txBytes) *txBytes = w;
-    emit frameSent(frame);
+    emit frameSent(frame, func);
 
     QByteArray rx = m_transport->read(m_cfg.responseTimeout);
     if (rx.isEmpty())
@@ -97,7 +96,7 @@ bool ModbusClient::transact(quint8 func, const QByteArray &txPdu,
         return false;
     }
     if (rxBytes) *rxBytes = rx.size();
-    emit frameReceived(rx);
+    emit frameReceived(rx, func);
 
     quint8 slave = 0, rfunc = 0;
     QByteArray rPdu;

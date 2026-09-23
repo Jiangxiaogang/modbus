@@ -12,19 +12,19 @@ class TcpTransport : public QObject, public ITransport
     Q_OBJECT
 public:
     TcpTransport(const QString &ip, int port);
-    ~TcpTransport();
+    ~TcpTransport() override;
 
-    bool open();
-    void close();
-    bool isOpen() const;
-    qint64 write(const char *data, qint64 len);
-    QByteArray read(int timeoutMs);
-    QString errorString() const;
+    bool open() override;
+    void close() override;
+    bool isOpen() const override;
+    qint64 write(const char *data, qint64 len) override;
+    QByteArray read(int timeoutMs) override;
+    QString errorString() const override;
 
 private:
     QString     m_ip;
     int         m_port;
-    QTcpSocket *m_tcp;
+    QTcpSocket *m_tcp = nullptr;
     QString     m_err;
 };
 

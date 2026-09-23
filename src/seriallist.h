@@ -2,6 +2,7 @@
 #define SERIALLIST_H
 
 #include <QString>
+#include <QStringList>
 
 class SerialList
 {

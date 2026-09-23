@@ -1,18 +1,12 @@
 #include "modbuscodec.h"
 #include "modbusdefs.h"
 
-static QByteArray toHexBytes(const char *data, int len)
+static int hexNibble(char c)
 {
-    static const char *hex = "0123456789ABCDEF";
-    QByteArray out;
-    out.reserve(len * 2);
-    for (int i = 0; i < len; ++i)
-    {
-        quint8 c = (quint8)data[i];
-        out.append(hex[(c >> 4) & 0xF]);
-        out.append(hex[c & 0xF]);
-    }
-    return out;
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
 }
 
 static bool fromHexBytes(const QByteArray &hex, QByteArray &out)
@@ -23,14 +17,10 @@ static bool fromHexBytes(const QByteArray &hex, QByteArray &out)
     out.reserve(hex.size() / 2);
     for (int i = 0; i < hex.size(); i += 2)
     {
-        bool ok1 = false, ok2 = false;
-        int hi = QChar(hex[i]).digitValue();
-        int lo = QChar(hex[i + 1]).digitValue();
-        if (hi < 0 || hi > 15) ok1 = false;
-        else ok1 = true;
-        if (lo < 0 || lo > 15) ok2 = false;
-        else ok2 = true;
-        if (!ok1 || !ok2) return false;
+        int hi = hexNibble(hex[i]);
+        int lo = hexNibble(hex[i + 1]);
+        if (hi < 0 || lo < 0)
+            return false;
         out.append((char)((hi << 4) | lo));
     }
     return true;
@@ -38,16 +28,13 @@ static bool fromHexBytes(const QByteArray &hex, QByteArray &out)
 
 QByteArray ModbusCodec::toHex(const QByteArray &bytes)
 {
-    QByteArray raw = toHexBytes(bytes.constData(), bytes.size());
-    if (raw.size() < 4)
-        return raw;
+    QByteArray hex = bytes.toHex().toUpper();
     QByteArray out;
-    out.reserve(raw.size() * 3 / 2);
-    for (int i = 0; i < raw.size(); i += 2)
+    out.reserve(hex.size() * 3 / 2);
+    for (int i = 0; i < hex.size(); i += 2)
     {
         if (i) out.append(' ');
-        out.append(raw.at(i));
-        out.append(raw.at(i + 1));
+        out.append(hex.mid(i, 2));
     }
     return out;
 }
@@ -68,14 +55,11 @@ QByteArray ModbusCodec::encode(ProtocolType proto, quint8 slave,
     }
     else if (proto == ProtocolASCII)
     {
-        QByteArray body = frame;                 // 含从站/功能码/PDU
-        quint8 lrc = modbusLrc(body.constData(), body.size());
-        QByteArray out;
-        out.append(':');
-        out.append(toHexBytes(body.constData(), body.size()));
-        out.append(toHexBytes((const char *)&lrc, 1));
-        out.append('\r');
-        out.append('\n');
+        quint8 lrc = modbusLrc(frame.constData(), frame.size());
+        QByteArray out = ":";
+        out.append(frame.toHex().toUpper());
+        out.append(QByteArray(1, (char)lrc).toHex().toUpper());
+        out.append("\r\n");
         return out;
     }
     else     // ProtocolTCP
@@ -191,25 +175,15 @@ QString ModbusCodec::exceptionText(quint8 code)
 {
     switch (code)
     {
-    case 0x01:
-        return "非法功能码";
-    case 0x02:
-        return "非法数据地址";
-    case 0x03:
-        return "非法数据值";
-    case 0x04:
-        return "从站设备故障";
-    case 0x05:
-        return "确认";
-    case 0x06:
-        return "从站忙";
-    case 0x08:
-        return "存储奇偶错误";
-    case 0x0A:
-        return "网关路径不可用";
-    case 0x0B:
-        return "网关目标设备无响应";
-    default:
-        return QString("异常码 0x%1").arg(code, 2, 16, QLatin1Char('0'));
+    case 0x01: return "非法功能码";
+    case 0x02: return "非法数据地址";
+    case 0x03: return "非法数据值";
+    case 0x04: return "从站设备故障";
+    case 0x05: return "确认";
+    case 0x06: return "从站忙";
+    case 0x08: return "存储奇偶错误";
+    case 0x0A: return "网关路径不可用";
+    case 0x0B: return "网关目标设备无响应";
+    default:   return QString("异常码 0x%1").arg(code, 2, 16, QLatin1Char('0'));
     }
 }

@@ -1,11 +1,11 @@
-# QT4.8.7 Project File
-QT       += core gui network
+# QT5.12 Project File
+QT       += core gui widgets network serialport
 TARGET    = modbus
 TEMPLATE  = app
 CONFIG   += c++11
 
 # Include paths
-INCLUDEPATH += $$PWD/src $$PWD/src/modbus
+INCLUDEPATH += $$PWD/src
 
 # Source files
 SOURCES += \
@@ -21,7 +21,9 @@ SOURCES += \
     src/tcptransport.cpp \
     src/udptransport.cpp \
     src/modbusclient.cpp \
+    src/modbusdevice.cpp \
     src/modbusworker.cpp \
+    src/commmonitor.cpp \
     src/realtimedata.cpp \
     src/serialtransport.cpp \
     src/seriallist.cpp
@@ -40,7 +42,10 @@ HEADERS += \
     src/tcptransport.h \
     src/udptransport.h \
     src/modbusclient.h \
+    src/modbusdevice.h \
     src/modbusworker.h \
+    src/commmonitor.h \
+    src/commevent.h \
     src/realtimedata.h \
     src/modbustransport.h \
     src/serialtransport.h \

@@ -2,11 +2,12 @@
 #define TRANSPORT_H
 
 #include <QByteArray>
+#include <QString>
 
 class ITransport
 {
 public:
-    virtual ~ITransport() {}
+    virtual ~ITransport() = default;
     virtual bool open() = 0;
     virtual void close() = 0;
     virtual bool isOpen() const = 0;

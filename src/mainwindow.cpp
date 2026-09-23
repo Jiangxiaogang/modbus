@@ -3,6 +3,7 @@
 #include "registerview.h"
 #include "commlogview.h"
 #include "modbusworker.h"
+#include "commmonitor.h"
 #include "realtimedata.h"
 #include "modbusdefs.h"
 #include "aboutdialog.h"
@@ -12,17 +13,14 @@
 #include <QStatusBar>
 #include <QLabel>
 #include <QThread>
-#include <QList>
 #include <QMessageBox>
-#include <QStyleFactory>
 #include <QShortcut>
 #include <QKeySequence>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
-    setWindowTitle(QString("%1 v%2")
-                   .arg(APP_PRODUCT_NAME).arg(APP_VERSION_STR));
+    setWindowTitle(QString("%1 v%2").arg(APP_PRODUCT_NAME).arg(APP_VERSION_STR));
     setMinimumSize(900, 500);
     resize(900, 560);
 
@@ -40,7 +38,7 @@ MainWindow::MainWindow(QWidget *parent)
     vsplit->addWidget(m_log);
     vsplit->setStretchFactor(0, 1);
     vsplit->setStretchFactor(1, 0);
-    vsplit->setSizes(QList<int>() << 320 << 130);
+    vsplit->setSizes({320, 130});
     setCentralWidget(vsplit);
 
     // 状态栏
@@ -52,13 +50,13 @@ MainWindow::MainWindow(QWidget *parent)
 
     // F1 弹出“关于”对话框（无菜单栏，用快捷键提供入口）
     QShortcut *aboutSc = new QShortcut(QKeySequence(Qt::Key_F1), this);
-    connect(aboutSc, SIGNAL(activated()), this, SLOT(showAbout()));
+    connect(aboutSc, &QShortcut::activated, this, [this]{ AboutDialog dlg(this); dlg.exec(); });
 
     // 工作线程
     m_thread = new QThread(this);
     m_worker = new ModbusWorker;
     m_worker->moveToThread(m_thread);
-    connect(m_thread, SIGNAL(finished()), m_worker, SLOT(deleteLater()));
+    connect(m_thread, &QThread::finished, m_worker, &QObject::deleteLater);
     m_thread->start();
 
     // 实时数据对象（中转站），位于 GUI 线程
@@ -66,33 +64,33 @@ MainWindow::MainWindow(QWidget *parent)
     m_view->setRealtimeData(m_data);
 
     // 面板 -> 工作线程
-    connect(m_panel, SIGNAL(connectClicked(ModbusConfig*)), m_worker, SLOT(connectDevice(ModbusConfig*)));
-    connect(m_panel, SIGNAL(disconnectClicked()), m_worker, SLOT(disconnectDevice()));
+    connect(m_panel, &ConnectionPanel::connectClicked, m_worker, &ModbusWorker::connectDevice);
+    connect(m_panel, &ConnectionPanel::disconnectClicked, m_worker, &ModbusWorker::disconnectDevice);
     // 连接后协议/轮询层改动：值传递排队到工作线程热更新
-    connect(m_panel, SIGNAL(configChanged(ModbusConfig)), m_worker, SLOT(applyConfig(ModbusConfig)));
+    connect(m_panel, &ConnectionPanel::configChanged, m_worker, &ModbusWorker::applyConfig);
 
     // 数据区 -> 工作线程
-    connect(m_view, SIGNAL(planChanged(int, QList<RegPlanItem>*)), m_worker, SLOT(setAreaPlan(int, QList<RegPlanItem>*)));
-    connect(m_view, SIGNAL(writeRequested(int, int, DataType, qint64)), m_worker, SLOT(writeRegister(int, int, DataType, qint64)));
+    connect(m_view, &RegisterView::planChanged, m_worker, &ModbusWorker::setAreaPlan);
+    connect(m_view, &RegisterView::writeRequested, m_worker, &ModbusWorker::writeRegister);
 
     // 工作线程 -> UI
-    connect(m_worker, SIGNAL(connectionStateChanged(bool)), this, SLOT(onConnectionState(bool)));
-    connect(m_worker, SIGNAL(connectError(QString)), this, SLOT(onConnectError(QString)));
-    connect(m_worker, SIGNAL(statsUpdated(quint32, quint32, quint32)), this, SLOT(onStats(quint32, quint32, quint32)));
+    connect(m_worker, &ModbusWorker::connectionStateChanged, this, &MainWindow::onConnectionState);
+    connect(m_worker, &ModbusWorker::connectError, this, &MainWindow::onConnectError);
 
-    // 工作线程 -> 通信日志（排队连接）
-    connect(m_worker, SIGNAL(logTx(bool, QString, QString)), m_log, SLOT(appendTx(bool, QString, QString)));
-    connect(m_worker, SIGNAL(logRx(bool, QString, QString)), m_log, SLOT(appendRx(bool, QString, QString)));
-    connect(m_worker, SIGNAL(logError(QString, QString)), m_log, SLOT(appendError(QString, QString)));
-    connect(m_worker, SIGNAL(logInfo(QString, QString)), m_log, SLOT(appendInfo(QString, QString)));
+    // 报文监控（worker 线程）-> 日志视图 / 状态栏（排队连接）
+    connect(m_worker->monitor(), &CommMonitor::eventAppended, m_log, &CommLogView::appendEvent);
+    connect(m_worker->monitor(), &CommMonitor::statsUpdated, this, &MainWindow::onStats);
 
     // 采集 -> 中转站 -> 展示：读到数据先经 API 写入 RealtimeData，再转发给视图显示
-    connect(m_worker, SIGNAL(readResult(int, int, int, qint64, QString, qint64)),
-            this,      SLOT(onWorkerReadResult(int, int, int, qint64, QString, qint64)));
-    connect(m_data,   SIGNAL(dataChanged(ReadPoint)),
-            m_view,    SLOT(onReadResult(ReadPoint)));
+    connect(m_worker, &ModbusWorker::readResult, this, &MainWindow::onWorkerReadResult);
+    connect(m_data, &RealtimeData::dataChanged, m_view, &RegisterView::onReadResult);
+    connect(m_worker, &ModbusWorker::writeResult, m_view, &RegisterView::onWriteResult);
+}
 
-    connect(m_worker, SIGNAL(writeResult(int, int, bool, QString)), m_view, SLOT(onWriteResult(int, int, bool, QString)));
+MainWindow::~MainWindow()
+{
+    m_thread->quit();
+    m_thread->wait();
 }
 
 void MainWindow::onConnectionState(bool connected)
@@ -101,11 +99,9 @@ void MainWindow::onConnectionState(bool connected)
     if (connected)
     {
         const ModbusConfig &cfg = m_panel->getConfig();
-        QString endpoint;
-        if (cfg.channel == ChannelSerial)
-            endpoint = cfg.portName;
-        else
-            endpoint = QString("%1:%2").arg(cfg.netAddr).arg(cfg.netPort);
+        QString endpoint = (cfg.channel == ChannelSerial)
+                           ? cfg.portName
+                           : QString("%1:%2").arg(cfg.netAddr).arg(cfg.netPort);
         m_lblConn->setText(QString("设备已连接(%1)").arg(endpoint));
         m_lblConn->setStyleSheet("QLabel{color:#0a;}");
     }
@@ -125,14 +121,7 @@ void MainWindow::onConnectError(const QString &msg)
 
 void MainWindow::onStats(quint32 tx, quint32 rx, quint32 err)
 {
-    m_lblStats->setText(QString("TX:%1  RX:%2  ERR:%3")
-                        .arg(tx).arg(rx).arg(err));
-}
-
-void MainWindow::showAbout()
-{
-    AboutDialog dlg(this);
-    dlg.exec();
+    m_lblStats->setText(QString("TX:%1  RX:%2  ERR:%3").arg(tx).arg(rx).arg(err));
 }
 
 void MainWindow::onWorkerReadResult(int areaIndex, int address, int status,

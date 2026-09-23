@@ -6,7 +6,6 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
-#include <QApplication>
 
 AboutDialog::AboutDialog(QWidget *parent)
     : QDialog(parent)
@@ -20,21 +19,18 @@ AboutDialog::AboutDialog(QWidget *parent)
     f.setPointSize(f.pointSize() + 6);
     f.setBold(true);
     nameLbl->setFont(f);
-    nameLbl->setAlignment(Qt::AlignCenter);
 
-    QLabel *verLbl = new QLabel(QString("版本 %1 (基于 Qt %2 构建)").arg(APP_VERSION_STR).arg(qVersion()), this);
-    verLbl->setAlignment(Qt::AlignCenter);
-
+    QLabel *verLbl  = new QLabel(QString("版本 %1 (基于 Qt %2 构建)").arg(APP_VERSION_STR).arg(qVersion()), this);
     QLabel *descLbl = new QLabel(APP_DESCRIPTION, this);
-    descLbl->setAlignment(Qt::AlignCenter);
-
     QLabel *copyLbl = new QLabel(APP_COPYRIGHT, this);
-    copyLbl->setAlignment(Qt::AlignCenter);
     copyLbl->setEnabled(false); // 灰色弱化显示版权行
+
+    for (QLabel *lbl : {nameLbl, verLbl, descLbl, copyLbl})
+        lbl->setAlignment(Qt::AlignCenter);
 
     QPushButton *okBtn = new QPushButton("确定", this);
     okBtn->setDefault(true);
-    connect(okBtn, SIGNAL(clicked()), this, SLOT(accept()));
+    connect(okBtn, &QPushButton::clicked, this, &QDialog::accept);
 
     QHBoxLayout *btnLay = new QHBoxLayout;
     btnLay->addStretch();
