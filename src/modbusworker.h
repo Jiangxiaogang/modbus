@@ -28,7 +28,8 @@ public slots:
     void connectDevice(ModbusConfig *cfg);
     void disconnectDevice();
     void setAreaPlan(int areaIndex, QList<RegPlanItem> *items);
-    void writeRegister(int areaIndex, int address, DataType type, qint64 value);
+    void writeRegister(int areaIndex, int address, DataType type,
+                       ByteOrder byteOrder, qint64 value);
 
 signals:
     void connectionStateChanged(bool connected);

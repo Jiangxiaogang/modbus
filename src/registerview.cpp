@@ -16,6 +16,7 @@
 #include <QSet>
 #include <algorithm>
 #include <functional>
+#include <cstring>
 
 // 只读单元格项：去掉可编辑标志，禁止双击进入编辑
 static QTableWidgetItem *makeReadOnlyItem(const QString &text)
@@ -45,14 +46,15 @@ RegisterView::RegisterView(QWidget *parent)
 
 void RegisterView::setupTab(int areaIndex)
 {
-    QTableWidget *t = new QTableWidget(0, 7, this);
+    QTableWidget *t = new QTableWidget(0, 8, this);
     t->setContextMenuPolicy(Qt::CustomContextMenu);
     t->setSelectionBehavior(QAbstractItemView::SelectRows);
     t->setSelectionMode(QAbstractItemView::ExtendedSelection);
     t->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed);
     t->verticalHeader()->setVisible(true);
 
-    t->setHorizontalHeaderLabels({"寄存器名称", "寄存器地址", "数据类型", "原始值", "设定值", "写入", "状态"});
+    t->setHorizontalHeaderLabels({"寄存器名称", "寄存器地址", "数据类型", "字节序",
+                                  "原始值", "设定值", "写入", "状态"});
     t->horizontalHeader()->setStretchLastSection(true);
     t->setColumnWidth(ColName, 120);
     for (int c = ColAddr; c <= ColStatus; ++c)
@@ -63,6 +65,7 @@ void RegisterView::setupTab(int areaIndex)
     if (hdrH > 0)
         t->verticalHeader()->setDefaultSectionSize(hdrH + 2);
     t->setItemDelegateForColumn(ColType, new TypeDelegate(areaIndex, this, t));
+    t->setItemDelegateForColumn(ColByteOrder, new ByteOrderDelegate(areaIndex, this, t));
 
     connect(t, &QTableWidget::customContextMenuRequested, this,
             [this, t, areaIndex](const QPoint &pos){ showAreaMenu(t, areaIndex, pos); });
@@ -78,11 +81,11 @@ int RegisterView::areaOf(QTableWidget *table) const
     return -1;
 }
 
-int RegisterView::addRegisters(int areaIndex, int startAddr, int count)
+int RegisterView::addRegisters(int areaIndex, int startAddr, int count,
+                               DataType type, ByteOrder byteOrder)
 {
     QTableWidget *t = m_tables[areaIndex];
     const AreaInfo &info = areaInfo(areaIndex);
-    DataType def = (info.readFunc == 1 || info.readFunc == 2) ? TypeBIT : TypeU16;
     const int base = info.plcBase;
 
     // 现有地址集合，O(1) 查重，替代逐项线性查找
@@ -91,12 +94,17 @@ int RegisterView::addRegisters(int areaIndex, int startAddr, int count)
         existing.insert(rd.protoAddr);
 
     // 预生成待添加项：越界忽略，重复地址计入跳过数
+    // 32位类型每点占两个寄存器，地址间隔为2
+    const int step = is32BitType(type) ? 2 : 1;
     QList<RowData> adds;
     int dup = 0;
     for (int i = 0; i < count; ++i)
     {
-        int proto = startAddr + i;
+        int proto = startAddr + i * step;
         if (proto < 0 || proto > 65535)
+            continue;
+        // 32位类型占两个连续寄存器，末地址需预留一个
+        if (is32BitType(type) && proto > 65534)
             continue;
         if (existing.contains(proto))
         {
@@ -109,7 +117,8 @@ int RegisterView::addRegisters(int areaIndex, int startAddr, int count)
                   : QString::number(proto + base);
         rd.plcAddr = proto + base;
         rd.protoAddr = proto;
-        rd.type = def;
+        rd.type = type;
+        rd.byteOrder = byteOrder;
         adds.append(rd);
     }
     if (adds.isEmpty())
@@ -170,17 +179,28 @@ void RegisterView::fillRow(QTableWidget *t, int areaIndex, int r,
     if (areaIndex == 0 || areaIndex == 1)
     {
         // 0区/1区为位类型，固定 BIT，不可编辑
-        QTableWidgetItem *typeItem = new QTableWidgetItem("bit");
+        QTableWidgetItem *typeItem = new QTableWidgetItem(dataTypeText(TypeBIT));
         typeItem->setFlags(typeItem->flags() & ~Qt::ItemIsEditable);
         typeItem->setTextAlignment(Qt::AlignCenter);
         t->setItem(r, ColType, typeItem);
+
+        // 位区无字节序概念，固定显示 '-' 且不可编辑
+        QTableWidgetItem *boItem = new QTableWidgetItem("-");
+        boItem->setFlags(boItem->flags() & ~Qt::ItemIsEditable);
+        boItem->setTextAlignment(Qt::AlignCenter);
+        t->setItem(r, ColByteOrder, boItem);
     }
     else
     {
-        // 3区/4区支持 uint16 / int16 选择：双击进入编辑，由 TypeDelegate 弹出下拉框
-        QTableWidgetItem *typeItem = new QTableWidgetItem(rd.type == TypeS16 ? "s16" : "u16");
+        // 3区/4区支持多种数据类型选择：双击进入编辑，由 TypeDelegate 弹出下拉框
+        QTableWidgetItem *typeItem = new QTableWidgetItem(dataTypeText(rd.type));
         typeItem->setTextAlignment(Qt::AlignCenter);
         t->setItem(r, ColType, typeItem);
+
+        // AI/AO 支持字节序选择：双击进入编辑，由 ByteOrderDelegate 弹出下拉框
+        QTableWidgetItem *boItem = new QTableWidgetItem(byteOrderText(rd.byteOrder));
+        boItem->setTextAlignment(Qt::AlignCenter);
+        t->setItem(r, ColByteOrder, boItem);
     }
 
     QPushButton *wbtn = new QPushButton("写入", t);
@@ -202,7 +222,7 @@ void RegisterView::rebuildPlan(int areaIndex)
 {
     QList<RegPlanItem> *items = new QList<RegPlanItem>();
     for (const RowData &rd : m_rows[areaIndex])
-        items->append(RegPlanItem{rd.protoAddr, rd.type});
+        items->append(RegPlanItem{rd.protoAddr, rd.type, rd.byteOrder});
     emit planChanged(areaIndex, items);
 }
 
@@ -211,6 +231,28 @@ void RegisterView::commitType(int area, int row, DataType tp)
 {
     if (area < 0 || area > 3 || row < 0 || row >= m_rows[area].size()) return;
     m_rows[area][row].type = tp;
+    // 类型位宽变化时，原字节序可能不再适用，规范化为该类型的默认值
+    if (!byteOrderValidFor(tp, m_rows[area][row].byteOrder))
+    {
+        m_rows[area][row].byteOrder = is32BitType(tp) ? ByteOrderABCD : ByteOrderAB;
+        if (QTableWidgetItem *it = m_tables[area]->item(row, ColByteOrder))
+            it->setText(byteOrderText(m_rows[area][row].byteOrder));
+    }
+    rebuildPlan(area);
+}
+
+DataType RegisterView::rowType(int area, int row) const
+{
+    if (area < 0 || area > 3 || row < 0 || row >= m_rows[area].size())
+        return TypeU16;
+    return m_rows[area][row].type;
+}
+
+// 字节序编辑提交回调（由 ByteOrderDelegate 在 setModelData 中调用）
+void RegisterView::commitByteOrder(int area, int row, ByteOrder bo)
+{
+    if (area < 0 || area > 3 || row < 0 || row >= m_rows[area].size()) return;
+    m_rows[area][row].byteOrder = bo;
     rebuildPlan(area);
 }
 
@@ -223,10 +265,11 @@ TypeDelegate::TypeDelegate(int area, RegisterView *owner, QObject *parent)
 
 QWidget *TypeDelegate::createEditor(QWidget *parent,
                                     const QStyleOptionViewItem &,
-                                    const QModelIndex &) const
+                                    const QModelIndex &index) const
 {
     QComboBox *cb = new QComboBox(parent);
-    cb->addItems({"u16", "s16"});
+    // 禁止改变位宽：仅列出与该行同宽的数据类型
+    cb->addItems(dataTypeTextsFor(m_owner->rowType(m_area, index.row())));
     // 选中即提交并关闭编辑器
     TypeDelegate *self = const_cast<TypeDelegate *>(this);
     connect(cb, QOverload<int>::of(&QComboBox::currentIndexChanged), self,
@@ -251,7 +294,48 @@ void TypeDelegate::setModelData(QWidget *editor, QAbstractItemModel *model,
     if (!cb) return;
     QString txt = cb->currentText();
     model->setData(index, txt, Qt::EditRole);
-    m_owner->commitType(m_area, index.row(), txt == "s16" ? TypeS16 : TypeU16);
+    m_owner->commitType(m_area, index.row(), dataTypeFromText(txt));
+}
+
+// ---------- ByteOrderDelegate ----------
+
+ByteOrderDelegate::ByteOrderDelegate(int area, RegisterView *owner, QObject *parent)
+    : QStyledItemDelegate(parent), m_area(area), m_owner(owner)
+{
+}
+
+QWidget *ByteOrderDelegate::createEditor(QWidget *parent,
+                                         const QStyleOptionViewItem &,
+                                         const QModelIndex &index) const
+{
+    QComboBox *cb = new QComboBox(parent);
+    // 可选字节序由该行数据类型位宽决定
+    cb->addItems(byteOrderTextsFor(m_owner->rowType(m_area, index.row())));
+    // 选中即提交并关闭编辑器
+    ByteOrderDelegate *self = const_cast<ByteOrderDelegate *>(this);
+    connect(cb, QOverload<int>::of(&QComboBox::currentIndexChanged), self,
+            [self, cb]{ self->commitData(cb); self->closeEditor(cb); });
+    return cb;
+}
+
+void ByteOrderDelegate::setEditorData(QWidget *editor, const QModelIndex &index) const
+{
+    QComboBox *cb = qobject_cast<QComboBox *>(editor);
+    if (!cb) return;
+    // 屏蔽信号，避免初始化选项时误触发提交关闭
+    cb->blockSignals(true);
+    cb->setCurrentIndex(qMax(0, cb->findText(index.model()->data(index, Qt::EditRole).toString())));
+    cb->blockSignals(false);
+}
+
+void ByteOrderDelegate::setModelData(QWidget *editor, QAbstractItemModel *model,
+                                     const QModelIndex &index) const
+{
+    QComboBox *cb = qobject_cast<QComboBox *>(editor);
+    if (!cb) return;
+    QString txt = cb->currentText();
+    model->setData(index, txt, Qt::EditRole);
+    m_owner->commitByteOrder(m_area, index.row(), byteOrderFromText(txt));
 }
 
 void RegisterView::onNameChanged(QTableWidgetItem *item)
@@ -282,9 +366,21 @@ void RegisterView::doWrite(int area, QTableWidget *t, QPushButton *btn)
         return;
     }
     bool ok = false;
-    qint64 val = txt.startsWith("0x", Qt::CaseInsensitive)
-                 ? txt.mid(2).toLongLong(&ok, 16)
-                 : txt.toLongLong(&ok, 10);
+    qint64 val = 0;
+    if (rd.type == TypeF32)
+    {
+        // float32 按浮点解析，存入其 32 位比特模式
+        float f = txt.toFloat(&ok);
+        quint32 bits = 0;
+        std::memcpy(&bits, &f, sizeof(bits));
+        val = (qint64)bits;
+    }
+    else
+    {
+        val = txt.startsWith("0x", Qt::CaseInsensitive)
+              ? txt.mid(2).toLongLong(&ok, 16)
+              : txt.toLongLong(&ok, 10);
+    }
     if (!ok)
     {
         btn->setText("错误");
@@ -294,7 +390,7 @@ void RegisterView::doWrite(int area, QTableWidget *t, QPushButton *btn)
         return;
     }
     btn->setText("写入");
-    emit writeRequested(area, rd.protoAddr, rd.type, val);
+    emit writeRequested(area, rd.protoAddr, rd.type, rd.byteOrder, val);
 }
 
 // 实时数据来自 RealtimeData 中转站转发的 dataChanged 信号
@@ -315,7 +411,7 @@ void RegisterView::onReadResult(const ReadPoint &pt)
     case ReadOk:
         st->setText("有效");
         st->setTextColor(Qt::darkGreen);
-        raw->setText(valueText(pt.value));
+        raw->setText(valueText(m_rows[pt.areaIndex][row].type, pt.value));
         break;
 
     case ReadTimeout:
@@ -397,10 +493,23 @@ void RegisterView::setRealtimeData(RealtimeData *data)
     m_data = data;
 }
 
-QString RegisterView::valueText(qint64 value) const
+QString RegisterView::valueText(DataType type, qint64 value) const
 {
-    return m_hexValue ? QString("0x%1").arg((quint16)value, 4, 16, QLatin1Char('0'))
-                      : QString::number(value);
+    // float32 始终按浮点显示，十六进制对其无意义
+    if (type == TypeF32)
+    {
+        quint32 bits = (quint32)value;
+        float f;
+        std::memcpy(&f, &bits, sizeof(f));
+        return QString::number(f, 'g', 7);
+    }
+    if (m_hexValue)
+    {
+        if (is32BitType(type))
+            return QString("0x%1").arg((quint32)value, 8, 16, QLatin1Char('0'));
+        return QString("0x%1").arg((quint16)value, 4, 16, QLatin1Char('0'));
+    }
+    return QString::number(value);
 }
 
 void RegisterView::setValueHex(bool hex)
@@ -413,7 +522,8 @@ void RegisterView::setValueHex(bool hex)
         {
             QTableWidgetItem *it = m_tables[a]->item(r, ColRaw);
             if (it && m_data->value(a, m_rows[a][r].protoAddr).status == ReadOk)
-                it->setText(valueText(m_data->value(a, m_rows[a][r].protoAddr).value));
+                it->setText(valueText(m_rows[a][r].type,
+                                      m_data->value(a, m_rows[a][r].protoAddr).value));
         }
     }
 }
@@ -431,7 +541,7 @@ int RegisterView::findRow(QTableWidget *table, int protoAddr) const
 void RegisterView::showAreaMenu(QTableWidget *t, int area, const QPoint &pos)
 {
     QMenu menu(this);
-    QAction *addAct = menu.addAction("快速添加...");
+    QAction *addAct = menu.addAction("添加点位...");
     QAction *delAct = menu.addAction("删除点位");
     menu.addSeparator();
     QAction *clearAct = menu.addAction("清空列表");
@@ -455,7 +565,7 @@ void RegisterView::showAreaMenu(QTableWidget *t, int area, const QPoint &pos)
     decValAct->setChecked(!m_hexValue);
 
     QAction *chosen = menu.exec(t->viewport()->mapToGlobal(pos));
-    if (chosen == addAct)         onQuickAddInArea(area);
+    if (chosen == addAct)         onAddPointsInArea(area);
     else if (chosen == delAct)    onDeleteRowsInArea(area, t);
     else if (chosen == clearAct)  onClearArea(area, t);
     else if (chosen == hexAct)    setAddrHex(true);
@@ -464,14 +574,15 @@ void RegisterView::showAreaMenu(QTableWidget *t, int area, const QPoint &pos)
     else if (chosen == decValAct) setValueHex(false);
 }
 
-void RegisterView::onQuickAddInArea(int area)
+void RegisterView::onAddPointsInArea(int area)
 {
     AddRegisterDialog dlg(area, this);
     if (dlg.exec() == QDialog::Accepted)
     {
-        int skipped = addRegisters(area, dlg.startAddr(), dlg.count());
+        int skipped = addRegisters(area, dlg.startAddr(), dlg.count(),
+                                   dlg.dataType(), dlg.byteOrder());
         if (skipped > 0)
-            QMessageBox::information(this, "快速添加",
+            QMessageBox::information(this, "添加点位",
                 QString("已跳过 %1 个与现有点位重复的地址。").arg(skipped));
     }
 }

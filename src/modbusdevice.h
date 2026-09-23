@@ -33,6 +33,8 @@ public:
     bool writeCoil(int address, bool value, int coilFunc, QString &err);
     // 写单个保持寄存器：regFunc = 6 / 16
     bool writeRegister(int address, quint16 value, int regFunc, QString &err);
+    // 写多个保持寄存器（功能码 16），用于 32 位类型
+    bool writeRegisters(int start, const QVector<quint16> &values, QString &err);
 
 signals:
     // 完整传输帧收发通知（透传自 ModbusClient），携带请求功能码

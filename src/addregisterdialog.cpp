@@ -1,6 +1,7 @@
 #include "addregisterdialog.h"
 #include <QSpinBox>
 #include <QLineEdit>
+#include <QComboBox>
 #include <QPushButton>
 #include <QFormLayout>
 #include <QDialogButtonBox>
@@ -19,11 +20,14 @@ static bool parseAddr(const QString &text, int *addr)
     return true;
 }
 
-AddRegisterDialog::AddRegisterDialog(int, QWidget *parent)
+AddRegisterDialog::AddRegisterDialog(int areaIndex, QWidget *parent)
     : QDialog(parent)
 {
-    setWindowTitle("快速添加");
+    setWindowTitle("添加点位");
     setModal(true);
+
+    const AreaInfo &info = areaInfo(areaIndex);
+    const bool bitArea = (info.readFunc == 1 || info.readFunc == 2);
 
     m_addrEdit = new QLineEdit("0", this);
     m_addrEdit->setPlaceholderText("十进制或0x十六进制");
@@ -32,9 +36,30 @@ AddRegisterDialog::AddRegisterDialog(int, QWidget *parent)
     m_countSpin->setRange(1, 65535);
     m_countSpin->setValue(10);
 
+    m_typeCombo = new QComboBox(this);
+    m_byteOrderCombo = new QComboBox(this);
+    if (bitArea)
+    {
+        // 位区类型固定 bit、无字节序，禁用选择
+        m_typeCombo->addItem(dataTypeText(TypeBIT));
+        m_typeCombo->setEnabled(false);
+        m_byteOrderCombo->addItem("-");
+        m_byteOrderCombo->setEnabled(false);
+    }
+    else
+    {
+        m_typeCombo->addItems(dataTypeTextsAll());
+        refreshByteOrderOptions();
+        // 类型位宽变化时同步切换可选字节序
+        connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+                this, [this](int){ refreshByteOrderOptions(); });
+    }
+
     QFormLayout *form = new QFormLayout;
     form->addRow("寄存器地址:", m_addrEdit);
     form->addRow("寄存器数量:", m_countSpin);
+    form->addRow("数据类型:", m_typeCombo);
+    form->addRow("字节序:", m_byteOrderCombo);
 
     m_okBtn = new QPushButton("确定", this);
     QPushButton *cancel = new QPushButton("取消", this);
@@ -64,4 +89,26 @@ int AddRegisterDialog::startAddr() const
 int AddRegisterDialog::count() const
 {
     return m_countSpin->value();
+}
+
+DataType AddRegisterDialog::dataType() const
+{
+    return dataTypeFromText(m_typeCombo->currentText());
+}
+
+ByteOrder AddRegisterDialog::byteOrder() const
+{
+    return byteOrderFromText(m_byteOrderCombo->currentText());
+}
+
+void AddRegisterDialog::refreshByteOrderOptions()
+{
+    const QStringList opts = byteOrderTextsFor(dataType());
+    const QString cur = m_byteOrderCombo->currentText();
+    m_byteOrderCombo->blockSignals(true);
+    m_byteOrderCombo->clear();
+    m_byteOrderCombo->addItems(opts);
+    const int i = m_byteOrderCombo->findText(cur);
+    m_byteOrderCombo->setCurrentIndex(i >= 0 ? i : 0);
+    m_byteOrderCombo->blockSignals(false);
 }

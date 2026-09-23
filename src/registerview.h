@@ -34,12 +34,31 @@ private:
     RegisterView *m_owner;
 };
 
+// 字节序列编辑器委托：仅 AI/AO 可编辑，双击弹出 AB/BA 下拉，选中即提交
+class ByteOrderDelegate : public QStyledItemDelegate
+{
+    Q_OBJECT
+public:
+    ByteOrderDelegate(int area, RegisterView *owner, QObject *parent = nullptr);
+
+    QWidget *createEditor(QWidget *parent, const QStyleOptionViewItem &option,
+                          const QModelIndex &index) const override;
+    void setEditorData(QWidget *editor, const QModelIndex &index) const override;
+    void setModelData(QWidget *editor, QAbstractItemModel *model,
+                      const QModelIndex &index) const override;
+
+private:
+    int           m_area;
+    RegisterView *m_owner;
+};
+
 struct RowData
 {
-    QString  name;
-    int      plcAddr;     // PLC 地址 (如 40001)
-    int      protoAddr;   // 协议地址 (0基)
-    DataType type;
+    QString   name;
+    int       plcAddr;     // PLC 地址 (如 40001)
+    int       protoAddr;   // 协议地址 (0基)
+    DataType  type;
+    ByteOrder byteOrder;   // 仅 AI/AO 有效；位区固定 ByteOrderAB
     // 实时值 (valid / rawValue) 由 RealtimeData 中转站统一持有，
     // 本结构仅保留点位定义，避免双份数据源。
 };
@@ -54,14 +73,21 @@ public:
     // 类型编辑提交回调（由 TypeDelegate 调用）：更新点位类型并同步读取计划
     void commitType(int area, int row, DataType tp);
 
+    // 字节序编辑提交回调（由 ByteOrderDelegate 调用）：更新点位字节序并同步读取计划
+    void commitByteOrder(int area, int row, ByteOrder bo);
+
+    // 查询某行数据类型（供 ByteOrderDelegate 决定可选字节序）
+    DataType rowType(int area, int row) const;
+
     // 绑定实时数据中转站，供切换数值格式时重新渲染原始值
     void setRealtimeData(RealtimeData *data);
 
 signals:
     // 某区读取计划变化（增删/改类型）
     void planChanged(int areaIndex, QList<RegPlanItem> *items);
-    // 请求写入某点
-    void writeRequested(int areaIndex, int protoAddr, DataType type, qint64 value);
+    // 请求写入某点（byteOrder 供 AI/AO 反向换算）
+    void writeRequested(int areaIndex, int protoAddr, DataType type,
+                        ByteOrder byteOrder, qint64 value);
 
 public slots:
     void onReadResult(const ReadPoint &pt);
@@ -73,25 +99,26 @@ private slots:
 
 private:
     void setupTab(int areaIndex);
-    int  addRegisters(int areaIndex, int startAddr, int count); // 返回因重复而跳过的数量
+    int  addRegisters(int areaIndex, int startAddr, int count,
+                      DataType type, ByteOrder byteOrder); // 返回因重复而跳过的数量
     void fillRow(QTableWidget *t, int areaIndex, int r,
                  const RowData &rd, const AreaInfo &info);
     void rebuildPlan(int areaIndex);
     int  areaOf(QTableWidget *table) const;
     int  findRow(QTableWidget *table, int protoAddr) const;
-    void onQuickAddInArea(int area);
+    void onAddPointsInArea(int area);
     void onDeleteRowsInArea(int area, QTableWidget *t);
     void onClearArea(int area, QTableWidget *t);
     void showAreaMenu(QTableWidget *t, int area, const QPoint &pos);
     void doWrite(int area, QTableWidget *t, QPushButton *btn);
     QString addrText(int protoAddr) const;  // 按当前格式显示协议地址
     void setAddrHex(bool hex);              // 切换地址格式并刷新所有区
-    QString valueText(qint64 value) const;  // 按当前格式显示数值
+    QString valueText(DataType type, qint64 value) const; // 按类型与当前格式显示数值
     void setValueHex(bool hex);             // 切换数值格式并刷新所有区原始值
 
     // 序号由垂直表头（Qt 自带行号）提供，故不再单独建列
     // 列序须与 setupTab 中表头顺序一致
-    enum Col { ColName = 0, ColAddr, ColType, ColRaw,
+    enum Col { ColName = 0, ColAddr, ColType, ColByteOrder, ColRaw,
                ColSet, ColWrite, ColStatus
              };
 

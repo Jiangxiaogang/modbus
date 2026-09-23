@@ -115,6 +115,28 @@ bool ModbusDevice::writeCoil(int address, bool value, int coilFunc, QString &err
     return ok;
 }
 
+bool ModbusDevice::writeRegisters(int start, const QVector<quint16> &values, QString &err)
+{
+    QByteArray tx;
+    tx.append((char)((start >> 8) & 0xFF));
+    tx.append((char)(start & 0xFF));
+    int qty = values.size();
+    tx.append((char)((qty >> 8) & 0xFF));
+    tx.append((char)(qty & 0xFF));
+    tx.append((char)(qty * 2));
+    for (quint16 v : values)
+    {
+        tx.append((char)((v >> 8) & 0xFF));
+        tx.append((char)(v & 0xFF));
+    }
+    QByteArray rx;
+    quint8 mbErr = 0;
+    bool ok = m_client->transact(16, tx, rx, err, nullptr, nullptr, &mbErr);
+    if (!ok)
+        emit operationFailed(err, mbErr);
+    return ok;
+}
+
 bool ModbusDevice::writeRegister(int address, quint16 value, int regFunc, QString &err)
 {
     QByteArray tx;

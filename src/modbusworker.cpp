@@ -7,6 +7,15 @@
 #include <QVector>
 #include <algorithm>
 
+// 该地址是否为某 32 位点位的首寄存器（用于避免分片把一对寄存器切开）
+static bool isPairBase(const QList<RegPlanItem> &items, int addr)
+{
+    for (const RegPlanItem &it : items)
+        if (it.address == addr && is32BitType(it.type))
+            return true;
+    return false;
+}
+
 ModbusWorker::ModbusWorker(QObject *parent)
     : QObject(parent)
 {
@@ -108,11 +117,16 @@ void ModbusWorker::runReadArea(int areaIndex, const QList<RegPlanItem> &items)
     const AreaInfo &info = areaInfo(areaIndex);
     int maxQ = (info.readFunc == 1 || info.readFunc == 2) ? 2000 : 125;
 
-    // 计划内地址升序排列，供连续段合并使用
+    // 收集计划覆盖的全部寄存器地址（32 位点位占两个），升序去重后供连续段合并
     QList<int> addrs;
     for (const RegPlanItem &it : items)
+    {
         addrs.append(it.address);
+        if (is32BitType(it.type))
+            addrs.append(it.address + 1);
+    }
     std::sort(addrs.begin(), addrs.end());
+    addrs.erase(std::unique(addrs.begin(), addrs.end()), addrs.end());
 
     if (m_cfg.readMode)
     {
@@ -127,14 +141,20 @@ void ModbusWorker::runReadArea(int areaIndex, const QList<RegPlanItem> &items)
                 runEnd = addrs[++i];
             ++i;
             for (int s = runStart; s <= runEnd; s += maxQ)
-                readChunk(areaIndex, s, qMin(maxQ, runEnd - s + 1), items);
+            {
+                int cnt = qMin(maxQ, runEnd - s + 1);
+                // 若分片末尾恰为某 32 位点位的首寄存器，则多读一个，避免其配偶落入下一分片
+                if (s + cnt <= runEnd && isPairBase(items, s + cnt - 1))
+                    ++cnt;
+                readChunk(areaIndex, s, cnt, items);
+            }
         }
     }
     else
     {
-        // 单点模式：计划内地址逐个读取
-        for (int addr : addrs)
-            readChunk(areaIndex, addr, 1, items);
+        // 单点模式：计划内每个点位单独读取（32位点位一次读两个寄存器）
+        for (const RegPlanItem &it : items)
+            readChunk(areaIndex, it.address, regCountOf(it.type), items);
     }
 }
 
@@ -194,9 +214,27 @@ void ModbusWorker::readChunk(int areaIndex, int start, int cnt,
         if (it.address < start || it.address >= start + cnt)
             continue;
         int idx = it.address - start;
-        if (idx < values.size())
+        if (is32BitType(it.type))
+        {
+            if (idx + 1 < values.size() && it.address + 1 < start + cnt)
+            {
+                quint32 bits = decode32((quint16)values[idx],
+                                        (quint16)values[idx + 1], it.byteOrder);
+                // F32 以比特模式存入 value，展示侧按 float 重新解释
+                qint64 v = (it.type == TypeS32) ? (qint32)bits : (qint64)bits;
+                emit readResult(areaIndex, it.address, ReadOk, v, QString(), 0);
+            }
+            else
+            {
+                emit readResult(areaIndex, it.address, ReadInvalid, 0, QString(), 0);
+            }
+        }
+        else if (idx < values.size())
         {
             qint64 v = values[idx];
+            // 字节序换算后再按符号解释：AB=原样，BA=交换两字节
+            if (it.byteOrder == ByteOrderBA)
+                v = swapBytes16((quint16)v);
             if (it.type == TypeS16)
                 v = (qint16)(quint16)v;
             emit readResult(areaIndex, it.address, ReadOk, v, QString(), 0);
@@ -208,7 +246,8 @@ void ModbusWorker::readChunk(int areaIndex, int start, int cnt,
     }
 }
 
-void ModbusWorker::writeRegister(int areaIndex, int address, DataType type, qint64 value)
+void ModbusWorker::writeRegister(int areaIndex, int address, DataType type,
+                                 ByteOrder byteOrder, qint64 value)
 {
     QMutexLocker lock(&m_mutex);
     if (!m_device->isConnected())
@@ -217,11 +256,29 @@ void ModbusWorker::writeRegister(int areaIndex, int address, DataType type, qint
         m_monitor->reportError("未连接");
         return;
     }
-    Q_UNUSED(type);
-
     QString err;
-    bool ok = (areaIndex == 0)
-              ? m_device->writeCoil(address, value != 0, m_cfg.coilWriteFunc, err)
-              : m_device->writeRegister(address, (quint16)value, m_cfg.regWriteFunc, err);
+    bool ok;
+    if (areaIndex == 0)
+    {
+        // 遥控点位：线圈写入
+        ok = m_device->writeCoil(address, value != 0, m_cfg.coilWriteFunc, err);
+    }
+    else if (is32BitType(type))
+    {
+        // 32 位类型固定用功能码 16 写两个连续寄存器
+        quint16 w0 = 0, w1 = 0;
+        encode32((quint32)value, byteOrder, w0, w1);
+        QVector<quint16> regs;
+        regs << w0 << w1;
+        ok = m_device->writeRegisters(address, regs, err);
+    }
+    else
+    {
+        // 写入前按字节序反向换算，与读取侧对称
+        quint16 out = (quint16)value;
+        if (byteOrder == ByteOrderBA)
+            out = swapBytes16(out);
+        ok = m_device->writeRegister(address, out, m_cfg.regWriteFunc, err);
+    }
     emit writeResult(areaIndex, address, ok, ok ? QString() : err);
 }
