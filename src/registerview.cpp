@@ -481,7 +481,7 @@ void RegisterView::onReadResult(const ReadPoint &pt)
 
     case ReadError:
 
-        st->setText(QString("错误:0x%1 %2")
+        st->setText(QString("错误:0x%1(%2)")
                     .arg((quint8)pt.errValue, 2, 16, QLatin1Char('0'))
                     .arg(pt.errText));
         st->setTextColor(Qt::red);

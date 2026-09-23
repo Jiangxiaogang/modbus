@@ -19,21 +19,21 @@ static bool isPairBase(const QList<RegPlanItem> &items, int addr)
     return false;
 }
 
-ModbusWorker::ModbusWorker(ModbusDevice *device, const ModbusConfig *cfg, QObject *parent)
-    : QObject(parent), m_cfgPtr(cfg), m_device(device)
+ModbusWorker::ModbusWorker(ModbusDevice *device, QObject *parent)
+    : QObject(parent), m_device(device)
 {
 }
 
 ModbusWorker::~ModbusWorker() = default;
 
-void ModbusWorker::applyConfig()
+void ModbusWorker::applyConfig(const ModbusParams &params)
 {
-    QMetaObject::invokeMethod(this, [this]{ doApplyConfig(); }, Qt::QueuedConnection);
+    QMetaObject::invokeMethod(this, [this, params]{ doApplyConfig(params); }, Qt::QueuedConnection);
 }
 
-void ModbusWorker::connectDevice()
+void ModbusWorker::connectDevice(const ModbusConfig &config)
 {
-    QMetaObject::invokeMethod(this, [this]{ doConnectDevice(); }, Qt::QueuedConnection);
+    QMetaObject::invokeMethod(this, [this, config]{ doConnectDevice(config); }, Qt::QueuedConnection);
 }
 
 void ModbusWorker::disconnectDevice()
@@ -55,16 +55,16 @@ void ModbusWorker::writeRegister(int areaIndex, int address, DataType type,
     }, Qt::QueuedConnection);
 }
 
-void ModbusWorker::doApplyConfig()
+void ModbusWorker::doApplyConfig(const ModbusParams &params)
 {
     QMutexLocker lock(&m_mutex);
 
-    m_params = m_cfgPtr->params;
+    m_config.params = params;
 
-    m_device->setParams(m_params);
+    m_device->setParams(params);
     if (m_timer)
     {
-        m_timer->setInterval(qMax(50, m_params.pollInterval));
+        m_timer->setInterval(qMax(50, params.pollInterval));
     }
     if (m_device->isConnected())
     {
@@ -72,12 +72,12 @@ void ModbusWorker::doApplyConfig()
     }
 }
 
-void ModbusWorker::doConnectDevice()
+void ModbusWorker::doConnectDevice(const ModbusConfig &config)
 {
     QMutexLocker lock(&m_mutex);
-    m_params = m_cfgPtr->params;
+    m_config = config;
 
-    if (!m_device->connectDevice(m_cfgPtr->transport, m_params))
+    if (!m_device->connectDevice(m_config.transport, m_config.params))
     {
         QString e = m_device->errorString();
         emit connectionStateChanged(false);
@@ -90,7 +90,7 @@ void ModbusWorker::doConnectDevice()
         m_timer = new QTimer(this);
         connect(m_timer, &QTimer::timeout, this, &ModbusWorker::doPoll);
     }
-    m_timer->setInterval(qMax(50, m_params.pollInterval));
+    m_timer->setInterval(qMax(50, m_config.params.pollInterval));
     m_timer->start();
     emit connectionStateChanged(true);
     emit infoMessage("连接成功");
@@ -155,7 +155,7 @@ void ModbusWorker::runReadArea(int areaIndex, const QList<RegPlanItem> &items)
     std::sort(addrs.begin(), addrs.end());
     addrs.erase(std::unique(addrs.begin(), addrs.end()), addrs.end());
 
-    if (m_params.readMode)
+    if (m_config.params.readMode)
     {
 
         int i = 0;
@@ -232,6 +232,7 @@ void ModbusWorker::readChunk(int areaIndex, int start, int cnt,
             errText  = ModbusCodec::exceptionText(mbErr);
         }
         else if (err == errorText(ErrorCode::ResponseTimeout)
+                 || err == errorText(ErrorCode::SerialRecvTimeout)
                  || err == errorText(ErrorCode::TcpRecvTimeout)
                  || err == errorText(ErrorCode::UdpRecvTimeout))
         {
@@ -305,7 +306,7 @@ void ModbusWorker::doWriteRegister(int areaIndex, int address, DataType type,
     if (areaIndex == 0)
     {
 
-        ok = m_device->writeCoil(address, value != 0, m_params.coilWriteFunc, err);
+        ok = m_device->writeCoil(address, value != 0, m_config.params.coilWriteFunc, err);
     }
     else if (is32BitType(type))
     {
@@ -324,7 +325,7 @@ void ModbusWorker::doWriteRegister(int areaIndex, int address, DataType type,
         {
             out = swapBytes16(out);
         }
-        ok = m_device->writeRegister(address, out, m_params.regWriteFunc, err);
+        ok = m_device->writeRegister(address, out, m_config.params.regWriteFunc, err);
     }
     emit writeResult(areaIndex, address, ok, ok ? QString() : err);
 }

@@ -10,16 +10,21 @@ enum class ErrorCode
     UnsupportedChannel,
     ResponseTimeout,
     FrameParseFailed,
+    FrameLengthError,
     EmptyResponse,
     SlaveException,
     FunctionMismatch,
     ConnectFailed,
     SerialOpenFailed,
     SerialWriteFailed,
+    SerialRecvTimeout,
     TcpConnectFailed,
+    TcpWriteFailed,
     TcpRecvTimeout,
     UdpBindFailed,
-    UdpRecvTimeout
+    UdpWriteFailed,
+    UdpRecvTimeout,
+    ConnectionLost
 };
 
 QString errorText(ErrorCode code);

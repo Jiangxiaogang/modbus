@@ -32,7 +32,7 @@ int SerialTransport::charIntervalMs() const
     return ms < 1 ? 1 : ms;
 }
 
-bool SerialTransport::open()
+ErrorCode SerialTransport::open()
 {
     m_serial = new QSerialPort(this);
     m_serial->setPortName(m_portName);
@@ -43,13 +43,12 @@ bool SerialTransport::open()
     m_serial->setFlowControl(QSerialPort::NoFlowControl);
     if (!m_serial->open(QIODevice::ReadWrite))
     {
-        m_err = errorText(ErrorCode::SerialOpenFailed, m_serial->errorString());
         delete m_serial;
         m_serial = nullptr;
-        return false;
+        return ErrorCode::SerialOpenFailed;
     }
     m_serial->clear(QSerialPort::AllDirections);
-    return true;
+    return ErrorCode::Ok;
 }
 
 void SerialTransport::close()
@@ -67,47 +66,45 @@ bool SerialTransport::isOpen() const
     return m_serial && m_serial->isOpen();
 }
 
-qint64 SerialTransport::write(const char *data, qint64 len)
+ErrorCode SerialTransport::write(const char *data, qint64 len, qint64 *written)
 {
     if (!isOpen())
     {
-        return -1;
+        return ErrorCode::ConnectionLost;
     }
     m_serial->clear(QSerialPort::Input);
     qint64 w = m_serial->write(data, len);
     if (w < 0)
     {
-        m_err = errorText(ErrorCode::SerialWriteFailed, m_serial->errorString());
-        return -1;
+        return ErrorCode::SerialWriteFailed;
     }
     m_serial->waitForBytesWritten(1000);
 
     QThread::msleep(charIntervalMs());
-    return w;
+    if (written)
+    {
+        *written = w;
+    }
+    return ErrorCode::Ok;
 }
 
-QByteArray SerialTransport::read(int timeoutMs)
+ErrorCode SerialTransport::read(int timeoutMs, QByteArray &data)
 {
-    QByteArray buf;
+    data.clear();
     if (!isOpen())
     {
-        return buf;
+        return ErrorCode::ConnectionLost;
     }
     if (!m_serial->waitForReadyRead(timeoutMs))
     {
-        return buf;
+        return ErrorCode::SerialRecvTimeout;
     }
-    buf.append(m_serial->readAll());
+    data.append(m_serial->readAll());
 
     const int interval = charIntervalMs();
     while (m_serial->waitForReadyRead(interval))
     {
-        buf.append(m_serial->readAll());
+        data.append(m_serial->readAll());
     }
-    return buf;
-}
-
-QString SerialTransport::errorString() const
-{
-    return m_err;
+    return ErrorCode::Ok;
 }

@@ -11,18 +11,16 @@ public:
     TcpTransport(const QString &ip, int port, QObject *parent = nullptr);
     ~TcpTransport() override;
 
-    bool open() override;
+    ErrorCode open() override;
     void close() override;
     bool isOpen() const override;
-    qint64 write(const char *data, qint64 len) override;
-    QByteArray read(int timeoutMs) override;
-    QString errorString() const override;
+    ErrorCode write(const char *data, qint64 len, qint64 *written = nullptr) override;
+    ErrorCode read(int timeoutMs, QByteArray &data) override;
 
 private:
     QString     m_ip;
     int         m_port;
     QTcpSocket *m_tcp = nullptr;
-    QString     m_err;
 };
 
 #endif

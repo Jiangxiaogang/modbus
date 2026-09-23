@@ -221,7 +221,7 @@ void ConnectionPanel::onConnectButton()
     m_connectBtn->setEnabled(false);
     setWidgetEnabled(false);
     buildConfig();
-    m_controller->connectDevice();
+    m_controller->connectDevice(m_config);
 }
 
 void ConnectionPanel::setConnected(bool connected)
@@ -241,5 +241,5 @@ void ConnectionPanel::onProtocolChanged()
         return;
     }
     buildConfig();
-    m_controller->applyConfig();
+    m_controller->applyConfig(m_config.params);
 }

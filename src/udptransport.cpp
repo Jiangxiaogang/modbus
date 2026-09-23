@@ -11,16 +11,15 @@ UdpTransport::~UdpTransport()
     close();
 }
 
-bool UdpTransport::open()
+ErrorCode UdpTransport::open()
 {
     m_udp = new QUdpSocket(this);
     if (!m_udp->bind(0))
     {
-        m_err = errorText(ErrorCode::UdpBindFailed);
-        return false;
+        return ErrorCode::UdpBindFailed;
     }
     m_udp->connectToHost(m_ip, m_port);
-    return true;
+    return ErrorCode::Ok;
 }
 
 void UdpTransport::close()
@@ -34,29 +33,36 @@ bool UdpTransport::isOpen() const
     return m_udp != nullptr;
 }
 
-qint64 UdpTransport::write(const char *data, qint64 len)
+ErrorCode UdpTransport::write(const char *data, qint64 len, qint64 *written)
 {
     if (!m_udp)
     {
-        return -1;
+        return ErrorCode::ConnectionLost;
     }
-    return m_udp->writeDatagram(data, len, m_udp->peerAddress(), m_udp->peerPort());
+    qint64 w = m_udp->writeDatagram(data, len, m_udp->peerAddress(), m_udp->peerPort());
+    if (w < 0)
+    {
+        return ErrorCode::UdpWriteFailed;
+    }
+    if (written)
+    {
+        *written = w;
+    }
+    return ErrorCode::Ok;
 }
 
-QByteArray UdpTransport::read(int timeoutMs)
+ErrorCode UdpTransport::read(int timeoutMs, QByteArray &data)
 {
+    data.clear();
+    if (!m_udp)
+    {
+        return ErrorCode::ConnectionLost;
+    }
     if (!m_udp->waitForReadyRead(timeoutMs))
     {
-        m_err = errorText(ErrorCode::UdpRecvTimeout);
-        return QByteArray();
+        return ErrorCode::UdpRecvTimeout;
     }
-    QByteArray dgram;
-    dgram.resize(m_udp->pendingDatagramSize());
-    m_udp->readDatagram(dgram.data(), dgram.size());
-    return dgram;
-}
-
-QString UdpTransport::errorString() const
-{
-    return m_err;
+    data.resize(m_udp->pendingDatagramSize());
+    m_udp->readDatagram(data.data(), data.size());
+    return ErrorCode::Ok;
 }

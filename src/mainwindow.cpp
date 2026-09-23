@@ -56,7 +56,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     m_thread = new QThread(this);
     m_device = new ModbusDevice(m_monitor);
-    m_worker = new ModbusWorker(m_device, &m_panel->getConfig());
+    m_worker = new ModbusWorker(m_device);
     m_panel->setController(m_worker);
     m_view->setController(m_worker);
     m_device->moveToThread(m_thread);

@@ -15,11 +15,11 @@ class ModbusWorker : public QObject, public IModbusController
 {
     Q_OBJECT
 public:
-    ModbusWorker(ModbusDevice *device, const ModbusConfig *cfg, QObject *parent = nullptr);
+    ModbusWorker(ModbusDevice *device, QObject *parent = nullptr);
     ~ModbusWorker() override;
 
-    void applyConfig() override;
-    void connectDevice() override;
+    void applyConfig(const ModbusParams &params) override;
+    void connectDevice(const ModbusConfig &config) override;
     void disconnectDevice() override;
     void setAreaPlan(int areaIndex, const QList<RegPlanItem> &items) override;
     void writeRegister(int areaIndex, int address, DataType type,
@@ -38,8 +38,8 @@ private slots:
     void doPoll();
 
 private:
-    void doApplyConfig();
-    void doConnectDevice();
+    void doApplyConfig(const ModbusParams &params);
+    void doConnectDevice(const ModbusConfig &config);
     void doDisconnectDevice();
     void doSetAreaPlan(int areaIndex, const QList<RegPlanItem> &items);
     void doWriteRegister(int areaIndex, int address, DataType type,
@@ -48,8 +48,7 @@ private:
     void runReadArea(int areaIndex, const QList<RegPlanItem> &items);
     void readChunk(int areaIndex, int start, int cnt, const QList<RegPlanItem> &items);
 
-    const ModbusConfig *m_cfgPtr = nullptr;
-    ModbusParams        m_params;
+    ModbusConfig        m_config;
     QList<RegPlanItem>  m_plans[4];
     ModbusDevice       *m_device = nullptr;
     QTimer             *m_timer  = nullptr;

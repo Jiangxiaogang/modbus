@@ -1,6 +1,7 @@
 #ifndef TRANSPORT_H
 #define TRANSPORT_H
 
+#include "errorcodes.h"
 #include <QByteArray>
 #include <QString>
 #include <QObject>
@@ -12,12 +13,11 @@ public:
         : QObject(parent) {}
     ~ITransport() override = default;
 
-    virtual bool open() = 0;
+    virtual ErrorCode open() = 0;
     virtual void close() = 0;
     virtual bool isOpen() const = 0;
-    virtual qint64 write(const char *data, qint64 len) = 0;
-    virtual QByteArray read(int timeoutMs) = 0;
-    virtual QString errorString() const = 0;
+    virtual ErrorCode write(const char *data, qint64 len, qint64 *written = nullptr) = 0;
+    virtual ErrorCode read(int timeoutMs, QByteArray &data) = 0;
 };
 
 #endif

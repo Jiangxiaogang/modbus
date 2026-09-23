@@ -176,10 +176,15 @@ QByteArray ModbusCodec::tryExtract(ProtocolType proto,
 }
 
 bool ModbusCodec::decode(ProtocolType proto, const QByteArray &frame,
-                         quint8 &slave, quint8 &func, QByteArray &pdu)
+                         quint8 &slave, quint8 &func, QByteArray &pdu,
+                         ErrorCode *err)
 {
     slave = func = 0;
     pdu.clear();
+    if (err)
+    {
+        *err = ErrorCode::FrameParseFailed;
+    }
     if (frame.isEmpty())
     {
         return false;
@@ -229,13 +234,21 @@ bool ModbusCodec::decode(ProtocolType proto, const QByteArray &frame,
     }
     else
     {
-        if (frame.size() < 7)
+        if (frame.size() < 8)
         {
+            if (err)
+            {
+                *err = ErrorCode::FrameLengthError;
+            }
             return false;
         }
         int len = ((quint8)frame[4] << 8) | (quint8)frame[5];
-        if (frame.size() < 6 + len)
+        if (len != frame.size() - 6)
         {
+            if (err)
+            {
+                *err = ErrorCode::FrameLengthError;
+            }
             return false;
         }
         slave = (quint8)frame[6];

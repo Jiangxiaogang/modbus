@@ -11,16 +11,15 @@ TcpTransport::~TcpTransport()
     close();
 }
 
-bool TcpTransport::open()
+ErrorCode TcpTransport::open()
 {
     m_tcp = new QTcpSocket(this);
     m_tcp->connectToHost(m_ip, m_port);
     if (!m_tcp->waitForConnected(3000))
     {
-        m_err = errorText(ErrorCode::TcpConnectFailed, m_tcp->errorString());
-        return false;
+        return ErrorCode::TcpConnectFailed;
     }
-    return true;
+    return ErrorCode::Ok;
 }
 
 void TcpTransport::close()
@@ -34,22 +33,35 @@ bool TcpTransport::isOpen() const
     return m_tcp && m_tcp->state() == QAbstractSocket::ConnectedState;
 }
 
-qint64 TcpTransport::write(const char *data, qint64 len)
+ErrorCode TcpTransport::write(const char *data, qint64 len, qint64 *written)
 {
-    return m_tcp ? m_tcp->write(data, len) : -1;
+    if (!m_tcp || m_tcp->state() != QAbstractSocket::ConnectedState)
+    {
+        return ErrorCode::ConnectionLost;
+    }
+    qint64 w = m_tcp->write(data, len);
+    if (w < 0)
+    {
+        return ErrorCode::TcpWriteFailed;
+    }
+    if (written)
+    {
+        *written = w;
+    }
+    return ErrorCode::Ok;
 }
 
-QByteArray TcpTransport::read(int timeoutMs)
+ErrorCode TcpTransport::read(int timeoutMs, QByteArray &data)
 {
+    data.clear();
+    if (!m_tcp || m_tcp->state() != QAbstractSocket::ConnectedState)
+    {
+        return ErrorCode::ConnectionLost;
+    }
     if (!m_tcp->waitForReadyRead(timeoutMs))
     {
-        m_err = errorText(ErrorCode::TcpRecvTimeout);
-        return QByteArray();
+        return ErrorCode::TcpRecvTimeout;
     }
-    return m_tcp->readAll();
-}
-
-QString TcpTransport::errorString() const
-{
-    return m_err;
+    data = m_tcp->readAll();
+    return ErrorCode::Ok;
 }

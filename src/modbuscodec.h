@@ -1,6 +1,7 @@
 #ifndef MODBUSCODEC_H
 #define MODBUSCODEC_H
 
+#include "errorcodes.h"
 #include <QByteArray>
 #include <QString>
 
@@ -69,7 +70,8 @@ public:
                                  const QByteArray &buffer, int *frameLen);
 
     static bool decode(ProtocolType proto, const QByteArray &frame,
-                       quint8 &slave, quint8 &func, QByteArray &pdu);
+                       quint8 &slave, quint8 &func, QByteArray &pdu,
+                       ErrorCode *err = nullptr);
 
     static bool isException(quint8 respFunc, quint8 reqFunc)
     {

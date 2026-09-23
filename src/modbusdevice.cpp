@@ -44,9 +44,10 @@ bool ModbusDevice::connectDevice(const TransportConfig &transport, const ModbusP
         m_lastErr = errorText(ErrorCode::UnsupportedChannel);
         return false;
     }
-    if (!m_transport->open())
+    ErrorCode openErr = m_transport->open();
+    if (openErr != ErrorCode::Ok)
     {
-        m_lastErr = m_transport->errorString();
+        m_lastErr = errorText(openErr);
         delete m_transport;
         m_transport = nullptr;
         return false;
@@ -102,10 +103,11 @@ bool ModbusDevice::transact(quint8 func, const QByteArray &txPdu,
     }
 
     QByteArray frame = ModbusCodec::encode(m_params.protocol, (quint8)m_params.slave, func, txPdu);
-    qint64 w = m_transport->write(frame.constData(), frame.size());
-    if (w < 0)
+    qint64 w = 0;
+    ErrorCode writeErr = m_transport->write(frame.constData(), frame.size(), &w);
+    if (writeErr != ErrorCode::Ok)
     {
-        err = m_transport->errorString();
+        err = errorText(writeErr);
         return false;
     }
     if (txBytes)
@@ -117,7 +119,13 @@ bool ModbusDevice::transact(quint8 func, const QByteArray &txPdu,
         m_monitor->recordTx(frame, func);
     }
 
-    QByteArray rx = m_transport->read(m_params.responseTimeout);
+    QByteArray rx;
+    ErrorCode rxErr = m_transport->read(m_params.responseTimeout, rx);
+    if (rxErr != ErrorCode::Ok)
+    {
+        err = errorText(rxErr);
+        return false;
+    }
     if (rx.isEmpty())
     {
         err = errorText(ErrorCode::ResponseTimeout);
@@ -134,9 +142,10 @@ bool ModbusDevice::transact(quint8 func, const QByteArray &txPdu,
 
     quint8 slave = 0, rfunc = 0;
     QByteArray rPdu;
-    if (!ModbusCodec::decode(m_params.protocol, rx, slave, rfunc, rPdu))
+    ErrorCode decErr = ErrorCode::FrameParseFailed;
+    if (!ModbusCodec::decode(m_params.protocol, rx, slave, rfunc, rPdu, &decErr))
     {
-        err = errorText(ErrorCode::FrameParseFailed);
+        err = errorText(decErr);
         return false;
     }
     if (ModbusCodec::isException(rfunc, func))
