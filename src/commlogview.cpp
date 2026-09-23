@@ -135,7 +135,9 @@ void CommLogView::clearLog()
 void CommLogView::flushPending()
 {
     if (m_pending.isEmpty())
+    {
         return;
+    }
 
     m_edit->setUpdatesEnabled(false);
 
@@ -147,7 +149,9 @@ void CommLogView::flushPending()
     for (const CommEvent &ev : m_pending)
     {
         if (needBlock)
+        {
             cur.insertBlock();
+        }
         needBlock = true;
         QTextCharFormat fmt;
         fmt.setForeground(QColor(eventColor(ev)));
@@ -162,5 +166,7 @@ void CommLogView::flushPending()
     m_edit->setUpdatesEnabled(true);
 
     if (!m_edit->textCursor().hasSelection())
+    {
         m_edit->verticalScrollBar()->setValue(m_edit->verticalScrollBar()->maximum());
+    }
 }

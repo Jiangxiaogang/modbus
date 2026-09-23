@@ -1,11 +1,13 @@
 #include "modbusdevice.h"
 #include "modbuscodec.h"
+#include "commmonitor.h"
+#include "errorcodes.h"
 #include "serialtransport.h"
 #include "tcptransport.h"
 #include "udptransport.h"
 
-ModbusDevice::ModbusDevice(QObject *parent)
-    : QObject(parent)
+ModbusDevice::ModbusDevice(CommMonitor *monitor, QObject *parent)
+    : QObject(parent), m_monitor(monitor)
 {
 }
 
@@ -14,25 +16,32 @@ ModbusDevice::~ModbusDevice()
     close();
 }
 
-ITransport *ModbusDevice::buildTransport(const ModbusConfig &cfg)
+ITransport *ModbusDevice::buildTransport(const TransportConfig &transport)
 {
-    if (cfg.channel == ChannelSerial)
-        return new SerialTransport(cfg.portName, cfg.baudRate, cfg.dataBits, cfg.stopBits, cfg.parity);
-    if (cfg.netType == NetworkTCP)
-        return new TcpTransport(cfg.netAddr, cfg.netPort);
-    if (cfg.netType == NetworkUDP)
-        return new UdpTransport(cfg.netAddr, cfg.netPort);
+    if (transport.channel == ChannelSerial)
+    {
+        return new SerialTransport(transport.portName, transport.baudRate,
+                                   transport.parity, this);
+    }
+    if (transport.netType == NetworkTCP)
+    {
+        return new TcpTransport(transport.netAddr, transport.netPort, this);
+    }
+    if (transport.netType == NetworkUDP)
+    {
+        return new UdpTransport(transport.netAddr, transport.netPort, this);
+    }
     return nullptr;
 }
 
-bool ModbusDevice::connectDevice(const ModbusConfig &cfg)
+bool ModbusDevice::connectDevice(const TransportConfig &transport, const ModbusParams &params)
 {
     close();
-    m_cfg = cfg;
-    m_transport = buildTransport(cfg);
+    m_params = params;
+    m_transport = buildTransport(transport);
     if (!m_transport)
     {
-        m_lastErr = "不支持的通道配置";
+        m_lastErr = errorText(ErrorCode::UnsupportedChannel);
         return false;
     }
     if (!m_transport->open())
@@ -70,9 +79,9 @@ QString ModbusDevice::errorString() const
     return m_lastErr;
 }
 
-void ModbusDevice::setConfig(const ModbusConfig &cfg)
+void ModbusDevice::setParams(const ModbusParams &params)
 {
-    m_cfg = cfg;
+    m_params = params;
 }
 
 bool ModbusDevice::transact(quint8 func, const QByteArray &txPdu,
@@ -82,51 +91,69 @@ bool ModbusDevice::transact(quint8 func, const QByteArray &txPdu,
 {
     rxPdu.clear();
     err.clear();
-    if (modbusErr) *modbusErr = 0;
+    if (modbusErr)
+    {
+        *modbusErr = 0;
+    }
     if (!isConnected())
     {
-        err = "设备未连接";
+        err = errorText(ErrorCode::NotConnected);
         return false;
     }
 
-    QByteArray frame = ModbusCodec::encode(m_cfg.protocol, (quint8)m_cfg.slave, func, txPdu);
+    QByteArray frame = ModbusCodec::encode(m_params.protocol, (quint8)m_params.slave, func, txPdu);
     qint64 w = m_transport->write(frame.constData(), frame.size());
     if (w < 0)
     {
         err = m_transport->errorString();
         return false;
     }
-    if (txBytes) *txBytes = w;
-    emit frameSent(frame, func);
+    if (txBytes)
+    {
+        *txBytes = w;
+    }
+    if (m_monitor)
+    {
+        m_monitor->recordTx(frame, func);
+    }
 
-    QByteArray rx = m_transport->read(m_cfg.responseTimeout);
+    QByteArray rx = m_transport->read(m_params.responseTimeout);
     if (rx.isEmpty())
     {
-        err = "设备响应超时";
+        err = errorText(ErrorCode::ResponseTimeout);
         return false;
     }
-    if (rxBytes) *rxBytes = rx.size();
-    emit frameReceived(rx, func);
+    if (rxBytes)
+    {
+        *rxBytes = rx.size();
+    }
+    if (m_monitor)
+    {
+        m_monitor->recordRx(rx, func);
+    }
 
     quint8 slave = 0, rfunc = 0;
     QByteArray rPdu;
-    if (!ModbusCodec::decode(m_cfg.protocol, rx, slave, rfunc, rPdu))
+    if (!ModbusCodec::decode(m_params.protocol, rx, slave, rfunc, rPdu))
     {
-        err = "响应解析失败(校验/格式错误)";
+        err = errorText(ErrorCode::FrameParseFailed);
         return false;
     }
     if (ModbusCodec::isException(rfunc, func))
     {
         quint8 code = rPdu.isEmpty() ? 0 : (quint8)rPdu[0];
-        if (modbusErr) *modbusErr = code;
-        err = "从站异常: " + ModbusCodec::exceptionText(code);
+        if (modbusErr)
+        {
+            *modbusErr = code;
+        }
+        err = errorText(ErrorCode::SlaveException, ModbusCodec::exceptionText(code));
         return false;
     }
     if (rfunc != func)
     {
-        err = QString("功能码不匹配 请求0x%1 响应0x%2")
-              .arg(func, 2, 16, QLatin1Char('0'))
-              .arg(rfunc, 2, 16, QLatin1Char('0'));
+        err = errorText(ErrorCode::FunctionMismatch,
+                        QString("%1").arg(func, 2, 16, QLatin1Char('0')),
+                        QString("%1").arg(rfunc, 2, 16, QLatin1Char('0')));
         return false;
     }
     rxPdu = rPdu;
@@ -143,7 +170,12 @@ bool ModbusDevice::readRequest(int readFunc, int start, int count,
     tx.append((char)(count & 0xFF));
     bool ok = transact((quint8)readFunc, tx, rx, err, nullptr, nullptr, modbusErr);
     if (!ok)
-        emit operationFailed(err, modbusErr ? *modbusErr : 0);
+    {
+        if (m_monitor)
+        {
+            m_monitor->recordError(err, modbusErr ? *modbusErr : 0);
+        }
+    }
     return ok;
 }
 
@@ -153,16 +185,20 @@ bool ModbusDevice::readBits(int readFunc, int start, int count,
     values.clear();
     QByteArray rx;
     if (!readRequest(readFunc, start, count, rx, err, modbusErr))
+    {
         return false;
+    }
     if (rx.isEmpty())
     {
-        err = "响应数据为空";
+        err = errorText(ErrorCode::EmptyResponse);
         return false;
     }
     const char *data = rx.constData() + 1;
     values.reserve(count);
     for (int i = 0; i < count; ++i)
+    {
         values.append(((data[i / 8] >> (i % 8)) & 0x01) != 0);
+    }
     return true;
 }
 
@@ -172,17 +208,21 @@ bool ModbusDevice::readRegisters(int readFunc, int start, int count,
     values.clear();
     QByteArray rx;
     if (!readRequest(readFunc, start, count, rx, err, modbusErr))
+    {
         return false;
+    }
     if (rx.isEmpty())
     {
-        err = "响应数据为空";
+        err = errorText(ErrorCode::EmptyResponse);
         return false;
     }
     int n = (quint8)rx[0] / 2;
     const char *data = rx.constData() + 1;
     values.reserve(n);
     for (int i = 0; i < n; ++i)
+    {
         values.append((quint16)(((quint8)data[2 * i] << 8) | (quint8)data[2 * i + 1]));
+    }
     return true;
 }
 
@@ -209,7 +249,12 @@ bool ModbusDevice::writeCoil(int address, bool value, int coilFunc, QString &err
     quint8 mbErr = 0;
     bool ok = transact((quint8)func, tx, rx, err, nullptr, nullptr, &mbErr);
     if (!ok)
-        emit operationFailed(err, mbErr);
+    {
+        if (m_monitor)
+        {
+            m_monitor->recordError(err, mbErr);
+        }
+    }
     return ok;
 }
 
@@ -235,7 +280,12 @@ bool ModbusDevice::writeRegister(int address, quint16 value, int regFunc, QStrin
     quint8 mbErr = 0;
     bool ok = transact((quint8)func, tx, rx, err, nullptr, nullptr, &mbErr);
     if (!ok)
-        emit operationFailed(err, mbErr);
+    {
+        if (m_monitor)
+        {
+            m_monitor->recordError(err, mbErr);
+        }
+    }
     return ok;
 }
 
@@ -257,6 +307,12 @@ bool ModbusDevice::writeRegisters(int start, const QVector<quint16> &values, QSt
     quint8 mbErr = 0;
     bool ok = transact(16, tx, rx, err, nullptr, nullptr, &mbErr);
     if (!ok)
-        emit operationFailed(err, mbErr);
+    {
+        if (m_monitor)
+        {
+            m_monitor->recordError(err, mbErr);
+        }
+    }
     return ok;
 }
+

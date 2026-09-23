@@ -1,5 +1,6 @@
 #include "connectionpanel.h"
-#include "modbusdefs.h"
+#include "modbuscodec.h"
+#include "modbuscontroller.h"
 
 #include <QLabel>
 #include <QFormLayout>
@@ -13,7 +14,9 @@ static void setLabelWidth(QFormLayout *form, int width)
     {
         QLayoutItem *item = form->itemAt(i, QFormLayout::LabelRole);
         if (item && item->widget())
+        {
             item->widget()->setFixedWidth(width);
+        }
     }
 }
 
@@ -122,9 +125,13 @@ ConnectionPanel::ConnectionPanel(QWidget *parent)
     connect(m_connectBtn, &QPushButton::clicked, this, &ConnectionPanel::onConnectButton);
 
     for (QComboBox *cb : {m_protoCombo, m_readModeCombo, m_coilFuncCombo, m_regFuncCombo})
+    {
         connect(cb, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ConnectionPanel::onProtocolChanged);
+    }
     for (QSpinBox *sb : {m_slaveSpin, m_timeoutSpin, m_pollSpin})
+    {
         connect(sb, QOverload<int>::of(&QSpinBox::valueChanged), this, &ConnectionPanel::onProtocolChanged);
+    }
 }
 
 void ConnectionPanel::refreshSerialPorts()
@@ -132,9 +139,13 @@ void ConnectionPanel::refreshSerialPorts()
     QStringList ports;
     const QList<QSerialPortInfo> list = QSerialPortInfo::availablePorts();
     for (const QSerialPortInfo &info : list)
+    {
         ports.append(info.portName());
+    }
     if (ports.isEmpty())
+    {
         ports.append("COM1");
+    }
 
     m_serPortCombo->clear();
     m_serPortCombo->addItems(ports);
@@ -145,25 +156,28 @@ const ModbusConfig& ConnectionPanel::getConfig()
     return m_config;
 }
 
+void ConnectionPanel::setController(IModbusController *controller)
+{
+    m_controller = controller;
+}
+
 void ConnectionPanel::buildConfig()
 {
-    m_config.channel         = (ChannelType)m_connCombo->currentIndex();
-    m_config.protocol        = (ProtocolType)m_protoCombo->currentIndex();
-    m_config.portName        = m_serPortCombo->currentText();
-    m_config.baudRate        = m_baudRateCombo->currentText().toInt();
-    m_config.dataBits        = 8;
-    m_config.stopBits        = 1;
-    m_config.parity          = m_parityCombo->currentIndex();
-    m_config.netType         = (NetworkType)m_netTypeCombo->currentIndex();
-    m_config.netAddr         = m_netAddrEdit->text();
-    m_config.netPort         = m_netPortSpin->value();
+    m_config.transport.channel  = (ChannelType)m_connCombo->currentIndex();
+    m_config.transport.portName = m_serPortCombo->currentText();
+    m_config.transport.baudRate = m_baudRateCombo->currentText().toInt();
+    m_config.transport.parity   = m_parityCombo->currentIndex();
+    m_config.transport.netType  = (NetworkType)m_netTypeCombo->currentIndex();
+    m_config.transport.netAddr  = m_netAddrEdit->text();
+    m_config.transport.netPort  = m_netPortSpin->value();
 
-    m_config.slave           = m_slaveSpin->value();
-    m_config.responseTimeout = m_timeoutSpin->value();
-    m_config.pollInterval    = m_pollSpin->value();
-    m_config.readMode        = m_readModeCombo->currentIndex();
-    m_config.coilWriteFunc   = m_coilFuncCombo->currentText().toInt();
-    m_config.regWriteFunc    = m_regFuncCombo->currentText().toInt();
+    m_config.params.protocol        = (ProtocolType)m_protoCombo->currentIndex();
+    m_config.params.slave           = m_slaveSpin->value();
+    m_config.params.responseTimeout = m_timeoutSpin->value();
+    m_config.params.pollInterval    = m_pollSpin->value();
+    m_config.params.readMode        = m_readModeCombo->currentIndex();
+    m_config.params.coilWriteFunc   = m_coilFuncCombo->currentText().toInt();
+    m_config.params.regWriteFunc    = m_regFuncCombo->currentText().toInt();
 }
 
 void ConnectionPanel::setTransportEnabled(bool enabled)
@@ -171,7 +185,9 @@ void ConnectionPanel::setTransportEnabled(bool enabled)
     for (QWidget *w : {(QWidget *)m_connCombo, (QWidget *)m_serPortCombo, (QWidget *)m_baudRateCombo,
                        (QWidget *)m_parityCombo, (QWidget *)m_netTypeCombo, (QWidget *)m_netAddrEdit,
                        (QWidget *)m_netPortSpin})
+    {
         w->setEnabled(enabled);
+    }
 }
 
 void ConnectionPanel::setProtocolEnabled(bool enabled)
@@ -179,7 +195,9 @@ void ConnectionPanel::setProtocolEnabled(bool enabled)
     for (QWidget *w : {(QWidget *)m_protoCombo, (QWidget *)m_slaveSpin, (QWidget *)m_timeoutSpin,
                        (QWidget *)m_pollSpin, (QWidget *)m_readModeCombo, (QWidget *)m_coilFuncCombo,
                        (QWidget *)m_regFuncCombo})
+    {
         w->setEnabled(enabled);
+    }
 }
 
 void ConnectionPanel::setWidgetEnabled(bool enabled)
@@ -190,16 +208,20 @@ void ConnectionPanel::setWidgetEnabled(bool enabled)
 
 void ConnectionPanel::onConnectButton()
 {
+    if (!m_controller)
+    {
+        return;
+    }
     if (m_connected)
     {
-        emit disconnectClicked();
+        m_controller->disconnectDevice();
         return;
     }
     m_connectBtn->setText("正在连接...");
     m_connectBtn->setEnabled(false);
     setWidgetEnabled(false);
     buildConfig();
-    emit connectClicked();
+    m_controller->connectDevice();
 }
 
 void ConnectionPanel::setConnected(bool connected)
@@ -214,8 +236,10 @@ void ConnectionPanel::setConnected(bool connected)
 
 void ConnectionPanel::onProtocolChanged()
 {
-    if (!m_connected)
+    if (!m_connected || !m_controller)
+    {
         return;
+    }
     buildConfig();
-    emit configChanged();
+    m_controller->applyConfig();
 }

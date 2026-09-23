@@ -2,16 +2,13 @@
 #define TCPTRANSPORT_H
 
 #include "modbustransport.h"
-#include "modbusdefs.h"
 #include <QString>
-#include <QObject>
 #include <QTcpSocket>
 
-class TcpTransport : public QObject, public ITransport
+class TcpTransport : public ITransport
 {
-    Q_OBJECT
 public:
-    TcpTransport(const QString &ip, int port);
+    TcpTransport(const QString &ip, int port, QObject *parent = nullptr);
     ~TcpTransport() override;
 
     bool open() override;

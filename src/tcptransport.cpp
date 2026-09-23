@@ -1,7 +1,8 @@
 #include "tcptransport.h"
+#include "errorcodes.h"
 
-TcpTransport::TcpTransport(const QString &ip, int port)
-    : m_ip(ip), m_port(port)
+TcpTransport::TcpTransport(const QString &ip, int port, QObject *parent)
+    : ITransport(parent), m_ip(ip), m_port(port)
 {
 }
 
@@ -16,7 +17,7 @@ bool TcpTransport::open()
     m_tcp->connectToHost(m_ip, m_port);
     if (!m_tcp->waitForConnected(3000))
     {
-        m_err = QString("TCP 连接失败: %1").arg(m_tcp->errorString());
+        m_err = errorText(ErrorCode::TcpConnectFailed, m_tcp->errorString());
         return false;
     }
     return true;
@@ -42,7 +43,7 @@ QByteArray TcpTransport::read(int timeoutMs)
 {
     if (!m_tcp->waitForReadyRead(timeoutMs))
     {
-        m_err = "TCP 接收超时";
+        m_err = errorText(ErrorCode::TcpRecvTimeout);
         return QByteArray();
     }
     return m_tcp->readAll();

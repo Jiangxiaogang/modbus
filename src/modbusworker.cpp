@@ -1,7 +1,8 @@
 #include "modbusworker.h"
 #include "modbusdevice.h"
 #include "modbuscodec.h"
-#include "modbusdefs.h"
+#include "errorcodes.h"
+#include "registerpoint.h"
 #include <QTimer>
 #include <QVector>
 #include <algorithm>
@@ -9,8 +10,12 @@
 static bool isPairBase(const QList<RegPlanItem> &items, int addr)
 {
     for (const RegPlanItem &it : items)
+    {
         if (it.address == addr && is32BitType(it.type))
+        {
             return true;
+        }
+    }
     return false;
 }
 
@@ -54,32 +59,30 @@ void ModbusWorker::doApplyConfig()
 {
     QMutexLocker lock(&m_mutex);
 
-    m_cfg.protocol        = m_cfgPtr->protocol;
-    m_cfg.slave           = m_cfgPtr->slave;
-    m_cfg.responseTimeout = m_cfgPtr->responseTimeout;
-    m_cfg.pollInterval    = m_cfgPtr->pollInterval;
-    m_cfg.readMode        = m_cfgPtr->readMode;
-    m_cfg.coilWriteFunc   = m_cfgPtr->coilWriteFunc;
-    m_cfg.regWriteFunc    = m_cfgPtr->regWriteFunc;
+    m_params = m_cfgPtr->params;
 
-    m_device->setConfig(m_cfg);
+    m_device->setParams(m_params);
     if (m_timer)
-        m_timer->setInterval(qMax(50, m_cfg.pollInterval));
+    {
+        m_timer->setInterval(qMax(50, m_params.pollInterval));
+    }
     if (m_device->isConnected())
+    {
         emit infoMessage("协议配置已更新");
+    }
 }
 
 void ModbusWorker::doConnectDevice()
 {
     QMutexLocker lock(&m_mutex);
-    m_cfg = *m_cfgPtr;
+    m_params = m_cfgPtr->params;
 
-    if (!m_device->connectDevice(m_cfg))
+    if (!m_device->connectDevice(m_cfgPtr->transport, m_params))
     {
         QString e = m_device->errorString();
         emit connectionStateChanged(false);
         emit connectError(e);
-        emit errorMessage("连接失败: " + e);
+        emit errorMessage(errorText(ErrorCode::ConnectFailed, e));
         return;
     }
     if (!m_timer)
@@ -87,7 +90,7 @@ void ModbusWorker::doConnectDevice()
         m_timer = new QTimer(this);
         connect(m_timer, &QTimer::timeout, this, &ModbusWorker::doPoll);
     }
-    m_timer->setInterval(qMax(50, m_cfg.pollInterval));
+    m_timer->setInterval(qMax(50, m_params.pollInterval));
     m_timer->start();
     emit connectionStateChanged(true);
     emit infoMessage("连接成功");
@@ -96,17 +99,25 @@ void ModbusWorker::doConnectDevice()
 void ModbusWorker::doDisconnectDevice()
 {
     QMutexLocker lock(&m_mutex);
-    if (m_timer) m_timer->stop();
+    if (m_timer)
+    {
+        m_timer->stop();
+    }
     const bool wasConnected = m_device->isConnected();
     m_device->disconnectDevice();
     emit connectionStateChanged(false);
     if (wasConnected)
+    {
         emit infoMessage("已断开连接");
+    }
 }
 
 void ModbusWorker::doSetAreaPlan(int areaIndex, const QList<RegPlanItem> &items)
 {
-    if (areaIndex < 0 || areaIndex > 3) return;
+    if (areaIndex < 0 || areaIndex > 3)
+    {
+        return;
+    }
     QMutexLocker lock(&m_mutex);
     m_plans[areaIndex] = items;
 }
@@ -115,11 +126,15 @@ void ModbusWorker::doPoll()
 {
     QMutexLocker lock(&m_mutex);
     if (!m_device->isConnected())
+    {
         return;
+    }
     for (int a = 0; a < 4; ++a)
     {
         if (!m_plans[a].isEmpty())
+        {
             runReadArea(a, m_plans[a]);
+        }
     }
 }
 
@@ -133,12 +148,14 @@ void ModbusWorker::runReadArea(int areaIndex, const QList<RegPlanItem> &items)
     {
         addrs.append(it.address);
         if (is32BitType(it.type))
+        {
             addrs.append(it.address + 1);
+        }
     }
     std::sort(addrs.begin(), addrs.end());
     addrs.erase(std::unique(addrs.begin(), addrs.end()), addrs.end());
 
-    if (m_cfg.readMode)
+    if (m_params.readMode)
     {
 
         int i = 0;
@@ -147,14 +164,18 @@ void ModbusWorker::runReadArea(int areaIndex, const QList<RegPlanItem> &items)
             int runStart = addrs[i];
             int runEnd   = runStart;
             while (i + 1 < addrs.size() && addrs[i + 1] == addrs[i] + 1)
+            {
                 runEnd = addrs[++i];
+            }
             ++i;
             for (int s = runStart; s <= runEnd; s += maxQ)
             {
                 int cnt = qMin(maxQ, runEnd - s + 1);
 
                 if (s + cnt <= runEnd && isPairBase(items, s + cnt - 1))
+                {
                     ++cnt;
+                }
                 readChunk(areaIndex, s, cnt, items);
             }
         }
@@ -163,7 +184,9 @@ void ModbusWorker::runReadArea(int areaIndex, const QList<RegPlanItem> &items)
     {
 
         for (const RegPlanItem &it : items)
+        {
             readChunk(areaIndex, it.address, regCountOf(it.type), items);
+        }
     }
 }
 
@@ -182,14 +205,18 @@ void ModbusWorker::readChunk(int areaIndex, int start, int cnt,
         QVector<bool> bits;
         ok = m_device->readBits(info.readFunc, start, cnt, bits, err, &mbErr);
         for (bool b : bits)
+        {
             values.append(b ? 1 : 0);
+        }
     }
     else
     {
         QVector<quint16> regs;
         ok = m_device->readRegisters(info.readFunc, start, cnt, regs, err, &mbErr);
         for (quint16 r : regs)
+        {
             values.append(r);
+        }
     }
 
     if (!ok)
@@ -204,14 +231,18 @@ void ModbusWorker::readChunk(int areaIndex, int start, int cnt,
             errValue = mbErr;
             errText  = ModbusCodec::exceptionText(mbErr);
         }
-        else if (err.contains("超时"))
+        else if (err == errorText(ErrorCode::ResponseTimeout)
+                 || err == errorText(ErrorCode::TcpRecvTimeout)
+                 || err == errorText(ErrorCode::UdpRecvTimeout))
         {
             status = ReadTimeout;
         }
         for (const RegPlanItem &it : items)
         {
             if (it.address >= start && it.address < start + cnt)
+            {
                 emit readResult(areaIndex, it.address, status, 0, errText, errValue);
+            }
         }
         return;
     }
@@ -219,7 +250,9 @@ void ModbusWorker::readChunk(int areaIndex, int start, int cnt,
     for (const RegPlanItem &it : items)
     {
         if (it.address < start || it.address >= start + cnt)
+        {
             continue;
+        }
         int idx = it.address - start;
         if (is32BitType(it.type))
         {
@@ -241,9 +274,13 @@ void ModbusWorker::readChunk(int areaIndex, int start, int cnt,
             qint64 v = values[idx];
 
             if (it.byteOrder == ByteOrderBA)
+            {
                 v = swapBytes16((quint16)v);
+            }
             if (it.type == TypeS16)
+            {
                 v = (qint16)(quint16)v;
+            }
             emit readResult(areaIndex, it.address, ReadOk, v, QString(), 0);
         }
         else
@@ -259,8 +296,8 @@ void ModbusWorker::doWriteRegister(int areaIndex, int address, DataType type,
     QMutexLocker lock(&m_mutex);
     if (!m_device->isConnected())
     {
-        emit writeResult(areaIndex, address, false, "未连接");
-        emit errorMessage("未连接");
+        emit writeResult(areaIndex, address, false, errorText(ErrorCode::NotConnected));
+        emit errorMessage(errorText(ErrorCode::NotConnected));
         return;
     }
     QString err;
@@ -268,7 +305,7 @@ void ModbusWorker::doWriteRegister(int areaIndex, int address, DataType type,
     if (areaIndex == 0)
     {
 
-        ok = m_device->writeCoil(address, value != 0, m_cfg.coilWriteFunc, err);
+        ok = m_device->writeCoil(address, value != 0, m_params.coilWriteFunc, err);
     }
     else if (is32BitType(type))
     {
@@ -284,8 +321,10 @@ void ModbusWorker::doWriteRegister(int areaIndex, int address, DataType type,
 
         quint16 out = (quint16)value;
         if (byteOrder == ByteOrderBA)
+        {
             out = swapBytes16(out);
-        ok = m_device->writeRegister(address, out, m_cfg.regWriteFunc, err);
+        }
+        ok = m_device->writeRegister(address, out, m_params.regWriteFunc, err);
     }
     emit writeResult(areaIndex, address, ok, ok ? QString() : err);
 }

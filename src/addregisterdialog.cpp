@@ -1,4 +1,5 @@
 #include "addregisterdialog.h"
+#include "registerpoint.h"
 #include <QSpinBox>
 #include <QLineEdit>
 #include <QComboBox>
@@ -14,8 +15,13 @@ static bool parseAddr(const QString &text, int *addr)
     int v = s.startsWith("0x", Qt::CaseInsensitive) ? s.mid(2).toInt(&ok, 16)
                                                     : s.toInt(&ok, 10);
     if (!ok || v < 0 || v > 65535)
+    {
         return false;
-    if (addr) *addr = v;
+    }
+    if (addr)
+    {
+        *addr = v;
+    }
     return true;
 }
 

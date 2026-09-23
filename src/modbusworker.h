@@ -1,7 +1,9 @@
 #ifndef MODBUSWORKER_H
 #define MODBUSWORKER_H
 
-#include "modbusdefs.h"
+#include "modbuscodec.h"
+#include "modbuscontroller.h"
+#include "registerpoint.h"
 #include <QObject>
 #include <QList>
 #include <QMutex>
@@ -9,19 +11,19 @@
 class ModbusDevice;
 class QTimer;
 
-class ModbusWorker : public QObject
+class ModbusWorker : public QObject, public IModbusController
 {
     Q_OBJECT
 public:
     ModbusWorker(ModbusDevice *device, const ModbusConfig *cfg, QObject *parent = nullptr);
     ~ModbusWorker() override;
 
-    void applyConfig();
-    void connectDevice();
-    void disconnectDevice();
-    void setAreaPlan(int areaIndex, const QList<RegPlanItem> &items);
+    void applyConfig() override;
+    void connectDevice() override;
+    void disconnectDevice() override;
+    void setAreaPlan(int areaIndex, const QList<RegPlanItem> &items) override;
     void writeRegister(int areaIndex, int address, DataType type,
-                       ByteOrder byteOrder, qint64 value);
+                       ByteOrder byteOrder, qint64 value) override;
 
 signals:
     void connectionStateChanged(bool connected);
@@ -47,7 +49,7 @@ private:
     void readChunk(int areaIndex, int start, int cnt, const QList<RegPlanItem> &items);
 
     const ModbusConfig *m_cfgPtr = nullptr;
-    ModbusConfig        m_cfg;
+    ModbusParams        m_params;
     QList<RegPlanItem>  m_plans[4];
     ModbusDevice       *m_device = nullptr;
     QTimer             *m_timer  = nullptr;

@@ -1,7 +1,7 @@
 #ifndef REGISTERDATA_H
 #define REGISTERDATA_H
 
-#include "modbusdefs.h"
+#include "registerpoint.h"
 #include <QObject>
 #include <QVector>
 #include <QMutex>

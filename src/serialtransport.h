@@ -9,7 +9,8 @@ class QSerialPort;
 class SerialTransport : public ITransport
 {
 public:
-    SerialTransport(const QString &portName, int baudRate, int dataBits, int stopBits, int parity);
+    SerialTransport(const QString &portName, int baudRate, int parity,
+                    QObject *parent = nullptr);
     ~SerialTransport() override;
 
     bool open() override;
@@ -24,8 +25,6 @@ private:
 
     QString      m_portName;
     int          m_baudRate;
-    int          m_dataBits;
-    int          m_stopBits;
     int          m_parity;
     QSerialPort *m_serial = nullptr;
     QString      m_err;

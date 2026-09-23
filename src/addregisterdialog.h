@@ -1,7 +1,7 @@
 #ifndef ADDREGISTERDIALOG_H
 #define ADDREGISTERDIALOG_H
 
-#include "modbusdefs.h"
+#include "registertypes.h"
 #include <QDialog>
 
 class QLineEdit;

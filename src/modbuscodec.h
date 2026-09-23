@@ -2,7 +2,61 @@
 #define MODBUSCODEC_H
 
 #include <QByteArray>
-#include "modbusdefs.h"
+#include <QString>
+
+enum ChannelType
+{
+    ChannelSerial = 0,
+    ChannelNetwork,
+};
+
+enum NetworkType
+{
+    NetworkTCP = 0,
+    NetworkUDP
+};
+
+enum ProtocolType
+{
+    ProtocolRTU  = 0,
+    ProtocolTCP,
+    ProtocolASCII
+};
+
+struct TransportConfig
+{
+    ChannelType  channel;
+
+    QString portName;
+    int     baudRate;
+    int     parity;
+
+    NetworkType netType;
+    QString netAddr;
+    int     netPort;
+};
+
+struct ModbusParams
+{
+    ProtocolType protocol;
+
+    int     slave;
+    int     responseTimeout;
+    int     pollInterval;
+    int     readMode;
+    int     coilWriteFunc;
+    int     regWriteFunc;
+};
+
+struct ModbusConfig
+{
+    TransportConfig transport;
+    ModbusParams    params;
+};
+
+quint16 modbusCrc(const char *data, int len);
+
+quint8  modbusLrc(const char *data, int len);
 
 class ModbusCodec
 {

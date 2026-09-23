@@ -3,11 +3,15 @@
 
 #include <QByteArray>
 #include <QString>
+#include <QObject>
 
-class ITransport
+class ITransport : public QObject
 {
 public:
-    virtual ~ITransport() = default;
+    explicit ITransport(QObject *parent = nullptr)
+        : QObject(parent) {}
+    ~ITransport() override = default;
+
     virtual bool open() = 0;
     virtual void close() = 0;
     virtual bool isOpen() const = 0;

@@ -1,7 +1,8 @@
 #include "registerview.h"
-#include "modbusdefs.h"
+#include "registerpoint.h"
 #include "addregisterdialog.h"
 #include "registerdata.h"
+#include "modbuscontroller.h"
 
 #include <QTabWidget>
 #include <QTableWidget>
@@ -52,16 +53,20 @@ void RegisterView::setupTab(int areaIndex)
     t->verticalHeader()->setVisible(true);
 
     t->setHorizontalHeaderLabels({"寄存器名称", "寄存器地址", "数据类型", "字节序",
-                                  "原始值", "设定值", "写入", "状态"});
+                                  "原始值", "设定值", "操作", "状态"});
     t->horizontalHeader()->setStretchLastSection(true);
     t->setColumnWidth(ColName, 120);
     for (int c = ColAddr; c <= ColStatus; ++c)
+    {
         t->setColumnWidth(c, 80);
+    }
     t->horizontalHeader()->setHighlightSections(false);
     t->verticalHeader()->setHighlightSections(false);
     int hdrH = t->horizontalHeader()->height();
     if (hdrH > 0)
+    {
         t->verticalHeader()->setDefaultSectionSize(hdrH + 2);
+    }
     t->setItemDelegateForColumn(ColType, new TypeDelegate(areaIndex, this, t));
     t->setItemDelegateForColumn(ColByteOrder, new ByteOrderDelegate(areaIndex, this, t));
 
@@ -75,7 +80,12 @@ void RegisterView::setupTab(int areaIndex)
 int RegisterView::areaOf(QTableWidget *table) const
 {
     for (int a = 0; a < 4; ++a)
-        if (m_tables[a] == table) return a;
+    {
+        if (m_tables[a] == table)
+        {
+            return a;
+        }
+    }
     return -1;
 }
 
@@ -88,7 +98,9 @@ int RegisterView::addRegisters(int areaIndex, int startAddr, int count,
 
     QSet<int> existing;
     for (const RowData &rd : m_rows[areaIndex])
+    {
         existing.insert(rd.protoAddr);
+    }
 
     const int step = is32BitType(type) ? 2 : 1;
     QList<RowData> adds;
@@ -97,10 +109,14 @@ int RegisterView::addRegisters(int areaIndex, int startAddr, int count,
     {
         int proto = startAddr + i * step;
         if (proto < 0 || proto > 65535)
+        {
             continue;
+        }
 
         if (is32BitType(type) && proto > 65534)
+        {
             continue;
+        }
         if (existing.contains(proto))
         {
             ++dup;
@@ -132,7 +148,9 @@ int RegisterView::addRegisters(int areaIndex, int startAddr, int count,
         m_rows[areaIndex] += adds;
         t->setRowCount(oldCount + adds.size());
         for (int k = 0; k < adds.size(); ++k)
+        {
             fillRow(t, areaIndex, oldCount + k, adds[k], info);
+        }
     }
     else
     {
@@ -142,7 +160,9 @@ int RegisterView::addRegisters(int areaIndex, int startAddr, int count,
         {
             while (pos < m_rows[areaIndex].size()
                    && m_rows[areaIndex][pos].protoAddr < rd.protoAddr)
+            {
                 ++pos;
+            }
             m_rows[areaIndex].insert(pos, rd);
             t->insertRow(pos);
             fillRow(t, areaIndex, pos, rd, info);
@@ -210,22 +230,33 @@ void RegisterView::fillRow(QTableWidget *t, int areaIndex, int r,
 
 void RegisterView::rebuildPlan(int areaIndex)
 {
+    if (!m_controller)
+    {
+        return;
+    }
     QList<RegPlanItem> items;
     for (const RowData &rd : m_rows[areaIndex])
+    {
         items.append(RegPlanItem{rd.protoAddr, rd.type, rd.byteOrder});
-    emit planChanged(areaIndex, items);
+    }
+    m_controller->setAreaPlan(areaIndex, items);
 }
 
 void RegisterView::commitType(int area, int row, DataType tp)
 {
-    if (area < 0 || area > 3 || row < 0 || row >= m_rows[area].size()) return;
+    if (area < 0 || area > 3 || row < 0 || row >= m_rows[area].size())
+    {
+        return;
+    }
     m_rows[area][row].type = tp;
 
     if (!byteOrderValidFor(tp, m_rows[area][row].byteOrder))
     {
         m_rows[area][row].byteOrder = is32BitType(tp) ? ByteOrderABCD : ByteOrderAB;
         if (QTableWidgetItem *it = m_tables[area]->item(row, ColByteOrder))
+        {
             it->setText(byteOrderText(m_rows[area][row].byteOrder));
+        }
     }
     rebuildPlan(area);
 }
@@ -233,13 +264,18 @@ void RegisterView::commitType(int area, int row, DataType tp)
 DataType RegisterView::rowType(int area, int row) const
 {
     if (area < 0 || area > 3 || row < 0 || row >= m_rows[area].size())
+    {
         return TypeU16;
+    }
     return m_rows[area][row].type;
 }
 
 void RegisterView::commitByteOrder(int area, int row, ByteOrder bo)
 {
-    if (area < 0 || area > 3 || row < 0 || row >= m_rows[area].size()) return;
+    if (area < 0 || area > 3 || row < 0 || row >= m_rows[area].size())
+    {
+        return;
+    }
     m_rows[area][row].byteOrder = bo;
     rebuildPlan(area);
 }
@@ -266,7 +302,10 @@ QWidget *TypeDelegate::createEditor(QWidget *parent,
 void TypeDelegate::setEditorData(QWidget *editor, const QModelIndex &index) const
 {
     QComboBox *cb = qobject_cast<QComboBox *>(editor);
-    if (!cb) return;
+    if (!cb)
+    {
+        return;
+    }
 
     cb->blockSignals(true);
     cb->setCurrentIndex(qMax(0, cb->findText(index.model()->data(index, Qt::EditRole).toString())));
@@ -277,7 +316,10 @@ void TypeDelegate::setModelData(QWidget *editor, QAbstractItemModel *model,
                                 const QModelIndex &index) const
 {
     QComboBox *cb = qobject_cast<QComboBox *>(editor);
-    if (!cb) return;
+    if (!cb)
+    {
+        return;
+    }
     QString txt = cb->currentText();
     model->setData(index, txt, Qt::EditRole);
     m_owner->commitType(m_area, index.row(), dataTypeFromText(txt));
@@ -305,7 +347,10 @@ QWidget *ByteOrderDelegate::createEditor(QWidget *parent,
 void ByteOrderDelegate::setEditorData(QWidget *editor, const QModelIndex &index) const
 {
     QComboBox *cb = qobject_cast<QComboBox *>(editor);
-    if (!cb) return;
+    if (!cb)
+    {
+        return;
+    }
 
     cb->blockSignals(true);
     cb->setCurrentIndex(qMax(0, cb->findText(index.model()->data(index, Qt::EditRole).toString())));
@@ -316,7 +361,10 @@ void ByteOrderDelegate::setModelData(QWidget *editor, QAbstractItemModel *model,
                                      const QModelIndex &index) const
 {
     QComboBox *cb = qobject_cast<QComboBox *>(editor);
-    if (!cb) return;
+    if (!cb)
+    {
+        return;
+    }
     QString txt = cb->currentText();
     model->setData(index, txt, Qt::EditRole);
     m_owner->commitByteOrder(m_area, index.row(), byteOrderFromText(txt));
@@ -324,10 +372,16 @@ void ByteOrderDelegate::setModelData(QWidget *editor, QAbstractItemModel *model,
 
 void RegisterView::onNameChanged(QTableWidgetItem *item)
 {
-    if (!item || item->column() != ColName) return;
+    if (!item || item->column() != ColName)
+    {
+        return;
+    }
     int area = areaOf(item->tableWidget());
     int row = item->row();
-    if (area < 0 || row < 0 || row >= m_rows[area].size()) return;
+    if (area < 0 || row < 0 || row >= m_rows[area].size())
+    {
+        return;
+    }
     m_rows[area][row].name = item->text();
 }
 
@@ -335,12 +389,24 @@ void RegisterView::doWrite(int area, QTableWidget *t, QPushButton *btn)
 {
     int row = -1;
     for (int r = 0; r < t->rowCount(); ++r)
-        if (t->cellWidget(r, ColWrite) == btn) { row = r; break; }
-    if (area < 0 || area > 3 || row < 0 || row >= m_rows[area].size()) return;
+    {
+        if (t->cellWidget(r, ColWrite) == btn)
+        {
+            row = r;
+            break;
+        }
+    }
+    if (area < 0 || area > 3 || row < 0 || row >= m_rows[area].size())
+    {
+        return;
+    }
 
     RowData &rd = m_rows[area][row];
     QTableWidgetItem *setItem = t->item(row, ColSet);
-    if (!setItem) return;
+    if (!setItem)
+    {
+        return;
+    }
     QString txt = setItem->text().trimmed();
     if (txt.isEmpty())
     {
@@ -374,15 +440,24 @@ void RegisterView::doWrite(int area, QTableWidget *t, QPushButton *btn)
         return;
     }
     btn->setText("写入");
-    emit writeRequested(area, rd.protoAddr, rd.type, rd.byteOrder, val);
+    if (m_controller)
+    {
+        m_controller->writeRegister(area, rd.protoAddr, rd.type, rd.byteOrder, val);
+    }
 }
 
 void RegisterView::onReadResult(const ReadPoint &pt)
 {
-    if (pt.areaIndex < 0 || pt.areaIndex > 3) return;
+    if (pt.areaIndex < 0 || pt.areaIndex > 3)
+    {
+        return;
+    }
     QTableWidget *t = m_tables[pt.areaIndex];
     int row = findRow(t, pt.address);
-    if (row < 0) return;
+    if (row < 0)
+    {
+        return;
+    }
 
     QTableWidgetItem *st  = t->item(row, ColStatus);
     QTableWidgetItem *raw = t->item(row, ColRaw);
@@ -419,20 +494,30 @@ void RegisterView::onReadResult(const ReadPoint &pt)
         st->setTextColor(Qt::red);
         raw->setText("");
         if (!pt.errText.isEmpty())
+        {
             st->setToolTip(pt.errText);
+        }
         break;
     }
 }
 
 void RegisterView::onWriteResult(int areaIndex, int protoAddr, bool ok, const QString &msg)
 {
-    if (areaIndex < 0 || areaIndex > 3) return;
+    if (areaIndex < 0 || areaIndex > 3)
+    {
+        return;
+    }
     QTableWidget *t = m_tables[areaIndex];
     int row = findRow(t, protoAddr);
-    if (row < 0) return;
+    if (row < 0)
+    {
+        return;
+    }
     QPushButton *btn = qobject_cast<QPushButton *>(t->cellWidget(row, ColWrite));
     if (btn)
+    {
         btn->setText(ok ? "成功" : "失败");
+    }
 
     if (!ok && areaInfo(areaIndex).writable)
     {
@@ -446,12 +531,20 @@ void RegisterView::onWriteResult(int areaIndex, int protoAddr, bool ok, const QS
 
 void RegisterView::onItemDoubleClicked(QTableWidgetItem *item)
 {
-    if (!item || item->column() != ColSet) return;
+    if (!item || item->column() != ColSet)
+    {
+        return;
+    }
     QTableWidget *t = item->tableWidget();
-    if (!t) return;
+    if (!t)
+    {
+        return;
+    }
     QPushButton *btn = qobject_cast<QPushButton *>(t->cellWidget(item->row(), ColWrite));
     if (btn)
+    {
         btn->setText("写入");
+    }
 }
 
 QString RegisterView::addrText(int protoAddr) const
@@ -461,17 +554,31 @@ QString RegisterView::addrText(int protoAddr) const
 
 void RegisterView::setAddrHex(bool hex)
 {
-    if (m_hexAddr == hex) return;
+    if (m_hexAddr == hex)
+    {
+        return;
+    }
     m_hexAddr = hex;
     for (int a = 0; a < 4; ++a)
+    {
         for (int r = 0; r < m_rows[a].size(); ++r)
+        {
             if (QTableWidgetItem *it = m_tables[a]->item(r, ColAddr))
+            {
                 it->setText(addrText(m_rows[a][r].protoAddr));
+            }
+        }
+    }
 }
 
 void RegisterView::setRegisterData(RegisterData *data)
 {
     m_data = data;
+}
+
+void RegisterView::setController(IModbusController *controller)
+{
+    m_controller = controller;
 }
 
 QString RegisterView::valueText(DataType type, qint64 value) const
@@ -487,7 +594,9 @@ QString RegisterView::valueText(DataType type, qint64 value) const
     if (m_hexValue)
     {
         if (is32BitType(type))
+        {
             return QString("0x%1").arg((quint32)value, 8, 16, QLatin1Char('0'));
+        }
         return QString("0x%1").arg((quint16)value, 4, 16, QLatin1Char('0'));
     }
     return QString::number(value);
@@ -495,7 +604,10 @@ QString RegisterView::valueText(DataType type, qint64 value) const
 
 void RegisterView::setValueHex(bool hex)
 {
-    if (m_hexValue == hex || !m_data) return;
+    if (m_hexValue == hex || !m_data)
+    {
+        return;
+    }
     m_hexValue = hex;
     for (int a = 0; a < 4; ++a)
     {
@@ -503,8 +615,10 @@ void RegisterView::setValueHex(bool hex)
         {
             QTableWidgetItem *it = m_tables[a]->item(r, ColRaw);
             if (it && m_data->value(a, m_rows[a][r].protoAddr).status == ReadOk)
+            {
                 it->setText(valueText(m_rows[a][r].type,
                                       m_data->value(a, m_rows[a][r].protoAddr).value));
+            }
         }
     }
 }
@@ -512,10 +626,18 @@ void RegisterView::setValueHex(bool hex)
 int RegisterView::findRow(QTableWidget *table, int protoAddr) const
 {
     int area = areaOf(table);
-    if (area < 0) return -1;
+    if (area < 0)
+    {
+        return -1;
+    }
     const QList<RowData> &rows = m_rows[area];
     for (int i = 0; i < rows.size(); ++i)
-        if (rows[i].protoAddr == protoAddr) return i;
+    {
+        if (rows[i].protoAddr == protoAddr)
+        {
+            return i;
+        }
+    }
     return -1;
 }
 
@@ -546,13 +668,34 @@ void RegisterView::showAreaMenu(QTableWidget *t, int area, const QPoint &pos)
     decValAct->setChecked(!m_hexValue);
 
     QAction *chosen = menu.exec(t->viewport()->mapToGlobal(pos));
-    if (chosen == addAct)         onAddPointsInArea(area);
-    else if (chosen == delAct)    onDeleteRowsInArea(area, t);
-    else if (chosen == clearAct)  onClearArea(area, t);
-    else if (chosen == hexAct)    setAddrHex(true);
-    else if (chosen == decAct)    setAddrHex(false);
-    else if (chosen == hexValAct) setValueHex(true);
-    else if (chosen == decValAct) setValueHex(false);
+    if (chosen == addAct)
+    {
+        onAddPointsInArea(area);
+    }
+    else if (chosen == delAct)
+    {
+        onDeleteRowsInArea(area, t);
+    }
+    else if (chosen == clearAct)
+    {
+        onClearArea(area, t);
+    }
+    else if (chosen == hexAct)
+    {
+        setAddrHex(true);
+    }
+    else if (chosen == decAct)
+    {
+        setAddrHex(false);
+    }
+    else if (chosen == hexValAct)
+    {
+        setValueHex(true);
+    }
+    else if (chosen == decValAct)
+    {
+        setValueHex(false);
+    }
 }
 
 void RegisterView::onAddPointsInArea(int area)
@@ -563,18 +706,28 @@ void RegisterView::onAddPointsInArea(int area)
         int skipped = addRegisters(area, dlg.startAddr(), dlg.count(),
                                    dlg.dataType(), dlg.byteOrder());
         if (skipped > 0)
+        {
             QMessageBox::information(this, "添加点位",
                 QString("已跳过 %1 个与现有点位重复的地址。").arg(skipped));
+        }
     }
 }
 
 void RegisterView::onDeleteRowsInArea(int area, QTableWidget *t)
 {
     QList<QTableWidgetItem *> sel = t->selectedItems();
-    if (sel.isEmpty()) return;
+    if (sel.isEmpty())
+    {
+        return;
+    }
     QList<int> rows;
     for (QTableWidgetItem *it : sel)
-        if (!rows.contains(it->row())) rows.append(it->row());
+    {
+        if (!rows.contains(it->row()))
+        {
+            rows.append(it->row());
+        }
+    }
     std::sort(rows.begin(), rows.end(), std::greater<int>());
     for (int r : rows)
     {
@@ -587,13 +740,17 @@ void RegisterView::onDeleteRowsInArea(int area, QTableWidget *t)
 void RegisterView::onClearArea(int area, QTableWidget *t)
 {
     if (area < 0 || !t || t->rowCount() == 0)
+    {
         return;
+    }
 
     if (QMessageBox::question(this, "清空列表",
                               QString("确定清空 %1 的全部点位吗？").arg(areaInfo(area).name),
                               QMessageBox::Yes | QMessageBox::No,
                               QMessageBox::No) != QMessageBox::Yes)
+    {
         return;
+    }
 
     t->setRowCount(0);
     m_rows[area].clear();

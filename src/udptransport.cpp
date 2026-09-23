@@ -1,7 +1,8 @@
 #include "udptransport.h"
+#include "errorcodes.h"
 
-UdpTransport::UdpTransport(const QString &ip, int port)
-    : m_ip(ip), m_port(port)
+UdpTransport::UdpTransport(const QString &ip, int port, QObject *parent)
+    : ITransport(parent), m_ip(ip), m_port(port)
 {
 }
 
@@ -15,7 +16,7 @@ bool UdpTransport::open()
     m_udp = new QUdpSocket(this);
     if (!m_udp->bind(0))
     {
-        m_err = "UDP 绑定失败";
+        m_err = errorText(ErrorCode::UdpBindFailed);
         return false;
     }
     m_udp->connectToHost(m_ip, m_port);
@@ -35,7 +36,10 @@ bool UdpTransport::isOpen() const
 
 qint64 UdpTransport::write(const char *data, qint64 len)
 {
-    if (!m_udp) return -1;
+    if (!m_udp)
+    {
+        return -1;
+    }
     return m_udp->writeDatagram(data, len, m_udp->peerAddress(), m_udp->peerPort());
 }
 
@@ -43,7 +47,7 @@ QByteArray UdpTransport::read(int timeoutMs)
 {
     if (!m_udp->waitForReadyRead(timeoutMs))
     {
-        m_err = "UDP 接收超时";
+        m_err = errorText(ErrorCode::UdpRecvTimeout);
         return QByteArray();
     }
     QByteArray dgram;

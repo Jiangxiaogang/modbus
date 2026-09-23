@@ -1,7 +1,7 @@
 #ifndef REGISTERVIEW_H
 #define REGISTERVIEW_H
 
-#include "modbusdefs.h"
+#include "registerpoint.h"
 #include <QWidget>
 #include <QList>
 #include <QStyledItemDelegate>
@@ -14,6 +14,7 @@ class QModelIndex;
 class QPushButton;
 class RegisterView;
 class RegisterData;
+class IModbusController;
 
 class TypeDelegate : public QStyledItemDelegate
 {
@@ -73,12 +74,7 @@ public:
 
     void setRegisterData(RegisterData *data);
 
-signals:
-
-    void planChanged(int areaIndex, const QList<RegPlanItem> &items);
-
-    void writeRequested(int areaIndex, int protoAddr, DataType type,
-                        ByteOrder byteOrder, qint64 value);
+    void setController(IModbusController *controller);
 
 public slots:
     void onReadResult(const ReadPoint &pt);
@@ -117,6 +113,7 @@ private:
     bool               m_hexAddr;
     bool               m_hexValue;
     RegisterData      *m_data = nullptr;
+    IModbusController *m_controller = nullptr;
 };
 
 #endif

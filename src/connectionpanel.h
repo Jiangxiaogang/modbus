@@ -1,13 +1,15 @@
 #ifndef CONNECTIONPANEL_H
 #define CONNECTIONPANEL_H
 
-#include "modbusdefs.h"
+#include "modbuscodec.h"
 #include <QWidget>
 #include <QComboBox>
 #include <QLineEdit>
 #include <QSpinBox>
 #include <QPushButton>
 #include <QGroupBox>
+
+class IModbusController;
 
 class ConnectionPanel : public QWidget
 {
@@ -16,11 +18,7 @@ public:
     explicit ConnectionPanel(QWidget *parent = nullptr);
     const ModbusConfig& getConfig();
 
-signals:
-
-    void connectClicked();
-    void disconnectClicked();
-    void configChanged();
+    void setController(IModbusController *controller);
 
 public slots:
     void setConnected(bool connected);
@@ -38,6 +36,7 @@ private:
 
     bool         m_connected;
     ModbusConfig m_config;
+    IModbusController *m_controller = nullptr;
 
     QComboBox   *m_connCombo;
     QPushButton *m_connectBtn;

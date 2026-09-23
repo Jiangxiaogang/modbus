@@ -2,16 +2,13 @@
 #define UDPTRANSPORT_H
 
 #include "modbustransport.h"
-#include "modbusdefs.h"
 #include <QString>
-#include <QObject>
 #include <QUdpSocket>
 
-class UdpTransport : public QObject, public ITransport
+class UdpTransport : public ITransport
 {
-    Q_OBJECT
 public:
-    UdpTransport(const QString &ip, int port);
+    UdpTransport(const QString &ip, int port, QObject *parent = nullptr);
     ~UdpTransport() override;
 
     bool open() override;

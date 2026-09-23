@@ -1,18 +1,59 @@
 #include "modbuscodec.h"
-#include "modbusdefs.h"
+
+quint16 modbusCrc(const char *data, int len)
+{
+    quint16 crc = 0xFFFF;
+    for (int i = 0; i < len; ++i)
+    {
+        crc ^= (quint8)data[i];
+        for (int b = 0; b < 8; ++b)
+        {
+            if (crc & 0x0001)
+            {
+                crc = (crc >> 1) ^ 0xA001;
+            }
+            else
+            {
+                crc >>= 1;
+            }
+        }
+    }
+    return crc;
+}
+
+quint8 modbusLrc(const char *data, int len)
+{
+    int sum = 0;
+    for (int i = 0; i < len; ++i)
+    {
+        sum += (quint8)data[i];
+    }
+    return (quint8)(((sum ^ 0xFF) + 1) & 0xFF);
+}
 
 static int hexNibble(char c)
 {
-    if (c >= '0' && c <= '9') return c - '0';
-    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    if (c >= '0' && c <= '9')
+    {
+        return c - '0';
+    }
+    if (c >= 'a' && c <= 'f')
+    {
+        return c - 'a' + 10;
+    }
+    if (c >= 'A' && c <= 'F')
+    {
+        return c - 'A' + 10;
+    }
     return -1;
 }
 
 static bool fromHexBytes(const QByteArray &hex, QByteArray &out)
 {
     if (hex.size() % 2 != 0)
+    {
         return false;
+    }
     out.clear();
     out.reserve(hex.size() / 2);
     for (int i = 0; i < hex.size(); i += 2)
@@ -20,7 +61,9 @@ static bool fromHexBytes(const QByteArray &hex, QByteArray &out)
         int hi = hexNibble(hex[i]);
         int lo = hexNibble(hex[i + 1]);
         if (hi < 0 || lo < 0)
+        {
             return false;
+        }
         out.append((char)((hi << 4) | lo));
     }
     return true;
@@ -33,7 +76,10 @@ QByteArray ModbusCodec::toHex(const QByteArray &bytes)
     out.reserve(hex.size() * 3 / 2);
     for (int i = 0; i < hex.size(); i += 2)
     {
-        if (i) out.append(' ');
+        if (i)
+        {
+            out.append(' ');
+        }
         out.append(hex.mid(i, 2));
     }
     return out;
@@ -82,13 +128,17 @@ QByteArray ModbusCodec::tryExtract(ProtocolType proto,
 {
     *frameLen = 0;
     if (buffer.isEmpty())
+    {
         return QByteArray();
+    }
 
     if (proto == ProtocolRTU)
     {
 
         if (buffer.size() < 4)
+        {
             return QByteArray();
+        }
         *frameLen = buffer.size();
         return buffer;
     }
@@ -97,21 +147,29 @@ QByteArray ModbusCodec::tryExtract(ProtocolType proto,
 
         int start = buffer.indexOf(':');
         if (start < 0)
+        {
             return QByteArray();
+        }
         int end = buffer.indexOf("\r\n", start);
         if (end < 0)
+        {
             return QByteArray();
+        }
         *frameLen = end + 2 - start;
         return buffer.mid(start, end + 2 - start);
     }
     else
     {
         if (buffer.size() < 6)
+        {
             return QByteArray();
+        }
         int len = ((quint8)buffer[4] << 8) | (quint8)buffer[5];
         int total = 6 + len;
         if (buffer.size() < total)
+        {
             return QByteArray();
+        }
         *frameLen = total;
         return buffer.left(total);
     }
@@ -123,19 +181,25 @@ bool ModbusCodec::decode(ProtocolType proto, const QByteArray &frame,
     slave = func = 0;
     pdu.clear();
     if (frame.isEmpty())
+    {
         return false;
+    }
 
     if (proto == ProtocolRTU)
     {
         if (frame.size() < 4)
+        {
             return false;
+        }
 
         QByteArray body = frame.left(frame.size() - 2);
         quint16 crc = modbusCrc(body.constData(), body.size());
         quint16 got = (quint8)frame[frame.size() - 1];
         got = (got << 8) | (quint8)frame[frame.size() - 2];
         if (crc != got)
+        {
             return false;
+        }
         slave = (quint8)frame[0];
         func  = (quint8)frame[1];
         pdu   = frame.mid(2, frame.size() - 4);
@@ -144,14 +208,20 @@ bool ModbusCodec::decode(ProtocolType proto, const QByteArray &frame,
     else if (proto == ProtocolASCII)
     {
         if (frame[0] != ':' || !frame.endsWith("\r\n"))
+        {
             return false;
+        }
         QByteArray hex = frame.mid(1, frame.size() - 3);
         QByteArray bytes;
         if (!fromHexBytes(hex, bytes) || bytes.size() < 3)
+        {
             return false;
+        }
         quint8 lrc = modbusLrc(bytes.constData(), bytes.size() - 1);
         if (lrc != (quint8)bytes[bytes.size() - 1])
+        {
             return false;
+        }
         slave = (quint8)bytes[0];
         func  = (quint8)bytes[1];
         pdu   = bytes.mid(2, bytes.size() - 3);
@@ -160,10 +230,14 @@ bool ModbusCodec::decode(ProtocolType proto, const QByteArray &frame,
     else
     {
         if (frame.size() < 7)
+        {
             return false;
+        }
         int len = ((quint8)frame[4] << 8) | (quint8)frame[5];
         if (frame.size() < 6 + len)
+        {
             return false;
+        }
         slave = (quint8)frame[6];
         func  = (quint8)frame[7];
         pdu   = frame.mid(8);

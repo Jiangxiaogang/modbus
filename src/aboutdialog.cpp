@@ -26,7 +26,9 @@ AboutDialog::AboutDialog(QWidget *parent)
     copyLbl->setEnabled(false);
 
     for (QLabel *lbl : {nameLbl, verLbl, descLbl, copyLbl})
+    {
         lbl->setAlignment(Qt::AlignCenter);
+    }
 
     QPushButton *okBtn = new QPushButton("确定", this);
     okBtn->setDefault(true);

@@ -13,8 +13,11 @@ SOURCES += \
     src/commlogview.cpp \
     src/addregisterdialog.cpp \
     src/aboutdialog.cpp \
-    src/modbusdefs.cpp \
+    src/registertypes.cpp \
+    src/registerpoint.cpp \
     src/modbuscodec.cpp \
+    src/commmonitor.cpp \
+    src/errorcodes.cpp \
     src/tcptransport.cpp \
     src/udptransport.cpp \
     src/modbusdevice.cpp \
@@ -30,8 +33,12 @@ HEADERS += \
     src/addregisterdialog.h \
     src/aboutdialog.h \
     src/version.h \
-    src/modbusdefs.h \
+    src/registertypes.h \
+    src/registerpoint.h \
     src/modbuscodec.h \
+    src/commmonitor.h \
+    src/errorcodes.h \
+    src/modbuscontroller.h \
     src/tcptransport.h \
     src/udptransport.h \
     src/modbusdevice.h \
