@@ -6,19 +6,16 @@
 #include <QObject>
 #include <QVector>
 
-class CommMonitor;
-
 class ModbusDevice : public QObject
 {
     Q_OBJECT
 public:
-    explicit ModbusDevice(CommMonitor *monitor, QObject *parent = nullptr);
+    explicit ModbusDevice(QObject *parent = nullptr);
     ~ModbusDevice() override;
 
-    bool connectDevice(const TransportConfig &transport, const ModbusParams &params);
+    bool connectDevice(const TransportConfig &transport, const ModbusParams &params, QString &err);
     void disconnectDevice();
     bool isConnected() const;
-    QString errorString() const;
 
     void setParams(const ModbusParams &params);
 
@@ -46,10 +43,8 @@ private:
     bool readRequest(int readFunc, int start, int count,
                      QByteArray &rx, QString &err, quint8 *modbusErr);
 
-    CommMonitor  *m_monitor = nullptr;
     ModbusParams  m_params;
     ITransport   *m_transport = nullptr;
-    QString       m_lastErr;
 };
 
 #endif

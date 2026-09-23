@@ -6,8 +6,8 @@
 #include "tcptransport.h"
 #include "udptransport.h"
 
-ModbusDevice::ModbusDevice(CommMonitor *monitor, QObject *parent)
-    : QObject(parent), m_monitor(monitor)
+ModbusDevice::ModbusDevice(QObject *parent)
+    : QObject(parent)
 {
 }
 
@@ -34,20 +34,21 @@ ITransport *ModbusDevice::buildTransport(const TransportConfig &transport)
     return nullptr;
 }
 
-bool ModbusDevice::connectDevice(const TransportConfig &transport, const ModbusParams &params)
+bool ModbusDevice::connectDevice(const TransportConfig &transport, const ModbusParams &params, QString &err)
 {
     close();
+    err.clear();
     m_params = params;
     m_transport = buildTransport(transport);
     if (!m_transport)
     {
-        m_lastErr = errorText(ErrorCode::UnsupportedChannel);
+        err = errorText(ErrorCode::UnsupportedChannel);
         return false;
     }
     ErrorCode openErr = m_transport->open();
     if (openErr != ErrorCode::Ok)
     {
-        m_lastErr = errorText(openErr);
+        err = errorText(openErr);
         delete m_transport;
         m_transport = nullptr;
         return false;
@@ -73,11 +74,6 @@ void ModbusDevice::disconnectDevice()
 bool ModbusDevice::isConnected() const
 {
     return m_transport && m_transport->isOpen();
-}
-
-QString ModbusDevice::errorString() const
-{
-    return m_lastErr;
 }
 
 void ModbusDevice::setParams(const ModbusParams &params)
@@ -114,10 +110,7 @@ bool ModbusDevice::transact(quint8 func, const QByteArray &txPdu,
     {
         *txBytes = w;
     }
-    if (m_monitor)
-    {
-        m_monitor->recordTx(frame, func);
-    }
+    CommMonitor::instance().recordTx(frame, func);
 
     QByteArray rx;
     ErrorCode rxErr = m_transport->read(m_params.responseTimeout, rx);
@@ -135,10 +128,7 @@ bool ModbusDevice::transact(quint8 func, const QByteArray &txPdu,
     {
         *rxBytes = rx.size();
     }
-    if (m_monitor)
-    {
-        m_monitor->recordRx(rx, func);
-    }
+    CommMonitor::instance().recordRx(rx, func);
 
     quint8 slave = 0, rfunc = 0;
     QByteArray rPdu;
@@ -180,10 +170,7 @@ bool ModbusDevice::readRequest(int readFunc, int start, int count,
     bool ok = transact((quint8)readFunc, tx, rx, err, nullptr, nullptr, modbusErr);
     if (!ok)
     {
-        if (m_monitor)
-        {
-            m_monitor->recordError(err, modbusErr ? *modbusErr : 0);
-        }
+        CommMonitor::instance().recordError(err, modbusErr ? *modbusErr : 0);
     }
     return ok;
 }
@@ -259,10 +246,7 @@ bool ModbusDevice::writeCoil(int address, bool value, int coilFunc, QString &err
     bool ok = transact((quint8)func, tx, rx, err, nullptr, nullptr, &mbErr);
     if (!ok)
     {
-        if (m_monitor)
-        {
-            m_monitor->recordError(err, mbErr);
-        }
+        CommMonitor::instance().recordError(err, mbErr);
     }
     return ok;
 }
@@ -290,10 +274,7 @@ bool ModbusDevice::writeRegister(int address, quint16 value, int regFunc, QStrin
     bool ok = transact((quint8)func, tx, rx, err, nullptr, nullptr, &mbErr);
     if (!ok)
     {
-        if (m_monitor)
-        {
-            m_monitor->recordError(err, mbErr);
-        }
+        CommMonitor::instance().recordError(err, mbErr);
     }
     return ok;
 }
@@ -317,10 +298,7 @@ bool ModbusDevice::writeRegisters(int start, const QVector<quint16> &values, QSt
     bool ok = transact(16, tx, rx, err, nullptr, nullptr, &mbErr);
     if (!ok)
     {
-        if (m_monitor)
-        {
-            m_monitor->recordError(err, mbErr);
-        }
+        CommMonitor::instance().recordError(err, mbErr);
     }
     return ok;
 }

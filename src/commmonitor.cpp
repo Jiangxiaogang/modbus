@@ -1,5 +1,11 @@
 #include "commmonitor.h"
 
+CommMonitor &CommMonitor::instance()
+{
+    static CommMonitor inst;
+    return inst;
+}
+
 CommMonitor::CommMonitor(QObject *parent)
     : QObject(parent)
 {

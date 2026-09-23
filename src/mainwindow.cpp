@@ -52,10 +52,8 @@ MainWindow::MainWindow(QWidget *parent)
     QShortcut *aboutSc = new QShortcut(QKeySequence(Qt::Key_F1), this);
     connect(aboutSc, &QShortcut::activated, this, [this]{ AboutDialog dlg(this); dlg.exec(); });
 
-    m_monitor = new CommMonitor(this);
-
     m_thread = new QThread(this);
-    m_device = new ModbusDevice(m_monitor);
+    m_device = new ModbusDevice;
     m_worker = new ModbusWorker(m_device);
     m_panel->setController(m_worker);
     m_view->setController(m_worker);
@@ -71,14 +69,14 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_worker, &ModbusWorker::connectionStateChanged, this, &MainWindow::onConnectionState);
     connect(m_worker, &ModbusWorker::connectError, this, &MainWindow::onConnectError);
 
-    connect(m_monitor, &CommMonitor::frameSent, m_log,
+    connect(&CommMonitor::instance(), &CommMonitor::frameSent, m_log,
             [this](const QByteArray &frame, quint8 func){ m_log->appendFrame(true, frame, func); });
-    connect(m_monitor, &CommMonitor::frameReceived, m_log,
+    connect(&CommMonitor::instance(), &CommMonitor::frameReceived, m_log,
             [this](const QByteArray &frame, quint8 func){ m_log->appendFrame(false, frame, func); });
-    connect(m_monitor, &CommMonitor::errorLogged, m_log,
+    connect(&CommMonitor::instance(), &CommMonitor::errorLogged, m_log,
             [this](const QString &text, quint8){ m_log->appendError(text); });
-    connect(m_monitor, &CommMonitor::infoLogged, m_log, &CommLogView::appendInfo);
-    connect(m_monitor, &CommMonitor::countersChanged, this, &MainWindow::onCountersChanged);
+    connect(&CommMonitor::instance(), &CommMonitor::infoLogged, m_log, &CommLogView::appendInfo);
+    connect(&CommMonitor::instance(), &CommMonitor::countersChanged, this, &MainWindow::onCountersChanged);
 
     connect(m_worker, &ModbusWorker::infoMessage,  this, &MainWindow::onInfoMessage);
     connect(m_worker, &ModbusWorker::errorMessage, this, &MainWindow::onErrorMessage);
@@ -99,7 +97,7 @@ void MainWindow::onConnectionState(bool connected)
     m_panel->setConnected(connected);
     if (connected)
     {
-        m_monitor->resetCounters();
+        CommMonitor::instance().resetCounters();
 
         const ModbusConfig &cfg = m_panel->getConfig();
         QString endpoint = (cfg.transport.channel == ChannelSerial)

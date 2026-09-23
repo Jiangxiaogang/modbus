@@ -28,7 +28,7 @@ class CommMonitor : public QObject
 {
     Q_OBJECT
 public:
-    explicit CommMonitor(QObject *parent = nullptr);
+    static CommMonitor &instance();
 
     void recordTx(const QByteArray &frame, quint8 func);
     void recordRx(const QByteArray &frame, quint8 func);
@@ -54,6 +54,9 @@ signals:
     void countersChanged(quint32 tx, quint32 rx, quint32 errors);
 
 private:
+    explicit CommMonitor(QObject *parent = nullptr);
+    Q_DISABLE_COPY(CommMonitor)
+
     void appendLocked(const CommRecord &rec);
 
     mutable QMutex    m_mutex;

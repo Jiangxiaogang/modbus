@@ -9,7 +9,6 @@ class CommLogView;
 class ModbusWorker;
 class ModbusDevice;
 class RegisterData;
-class CommMonitor;
 class QThread;
 class QLabel;
 
@@ -38,7 +37,6 @@ private:
     ModbusDevice    *m_device;
     ModbusWorker    *m_worker;
     RegisterData    *m_data;
-    CommMonitor     *m_monitor;
     QThread         *m_thread;
 
     QLabel *m_lblConn;

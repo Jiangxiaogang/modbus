@@ -77,9 +77,9 @@ void ModbusWorker::doConnectDevice(const ModbusConfig &config)
     QMutexLocker lock(&m_mutex);
     m_config = config;
 
-    if (!m_device->connectDevice(m_config.transport, m_config.params))
+    QString e;
+    if (!m_device->connectDevice(m_config.transport, m_config.params, e))
     {
-        QString e = m_device->errorString();
         emit connectionStateChanged(false);
         emit connectError(e);
         emit errorMessage(errorText(ErrorCode::ConnectFailed, e));
