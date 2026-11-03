@@ -56,8 +56,9 @@ void RegisterView::setupTab(int areaIndex)
                                   "原始值", "设定值", "操作", "状态"});
     t->horizontalHeader()->setStretchLastSection(true);
     t->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    t->setColumnWidth(ColName, 120);
-    t->setColumnWidth(ColFunc, 70);
+    t->setColumnWidth(ColName, 80);
+    t->setColumnWidth(ColAddr, 80);
+    t->setColumnWidth(ColFunc, 60);
     for (int c = ColType; c <= ColStatus; ++c)
     {
         t->setColumnWidth(c, 80);
