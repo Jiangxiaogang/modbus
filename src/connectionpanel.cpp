@@ -8,14 +8,29 @@
 #include <QHBoxLayout>
 #include <QSerialPortInfo>
 
-static void setLabelWidth(QFormLayout *form, int width)
+static int labelTextWidth(const QFormLayout *form)
+{
+    int width = 0;
+    for (int i = 0; i < form->rowCount(); ++i)
+    {
+        QLayoutItem *item = form->itemAt(i, QFormLayout::LabelRole);
+        QLabel *lbl = item ? qobject_cast<QLabel *>(item->widget()) : nullptr;
+        if (lbl)
+        {
+            width = qMax(width, lbl->fontMetrics().horizontalAdvance(lbl->text()));
+        }
+    }
+    return width;
+}
+
+static void applyLabelWidth(QFormLayout *form, int width)
 {
     for (int i = 0; i < form->rowCount(); ++i)
     {
         QLayoutItem *item = form->itemAt(i, QFormLayout::LabelRole);
         if (item && item->widget())
         {
-            item->widget()->setFixedWidth(width);
+            item->widget()->setMinimumWidth(width);
         }
     }
 }
@@ -39,7 +54,6 @@ ConnectionPanel::ConnectionPanel(QWidget *parent)
     connOpsLayout->addWidget(m_connectBtn);
 
     connLayout->addRow("连接方式:", connOpsLayout);
-    setLabelWidth(connLayout, 55);
 
     m_serGroup = new QGroupBox("串口配置", this);
     QFormLayout *serLayout = new QFormLayout(m_serGroup);
@@ -57,7 +71,6 @@ ConnectionPanel::ConnectionPanel(QWidget *parent)
     serLayout->addRow("串口号:", m_serPortCombo);
     serLayout->addRow("波特率:", m_baudRateCombo);
     serLayout->addRow("校验位:", m_parityCombo);
-    setLabelWidth(serLayout, 55);
 
     m_netGroup = new QGroupBox("网络配置", this);
     QFormLayout *netLayout = new QFormLayout(m_netGroup);
@@ -73,7 +86,6 @@ ConnectionPanel::ConnectionPanel(QWidget *parent)
     netLayout->addRow("网络协议:", m_netTypeCombo);
     netLayout->addRow("IP地址:", m_netAddrEdit);
     netLayout->addRow("端口号:", m_netPortSpin);
-    setLabelWidth(netLayout, 55);
 
     QGroupBox *protoGrp = new QGroupBox("协议配置", this);
     QFormLayout *pf = new QFormLayout(protoGrp);
@@ -111,7 +123,14 @@ ConnectionPanel::ConnectionPanel(QWidget *parent)
     m_regFuncCombo = new QComboBox(protoGrp);
     m_regFuncCombo->addItems({"06", "16"});
     pf->addRow("遥调命令:", m_regFuncCombo);
-    setLabelWidth(pf, 55);
+
+    // 标签列宽按当前字体实际文字宽度计算，避免固定像素在缩放后截断文字。
+    const int labelW = qMax(qMax(labelTextWidth(connLayout), labelTextWidth(serLayout)),
+                            qMax(labelTextWidth(netLayout), labelTextWidth(pf))) + 10;
+    applyLabelWidth(connLayout, labelW);
+    applyLabelWidth(serLayout, labelW);
+    applyLabelWidth(netLayout, labelW);
+    applyLabelWidth(pf, labelW);
 
     root->addWidget(connGrp);
     root->addWidget(m_serGroup);
