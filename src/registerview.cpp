@@ -45,19 +45,20 @@ RegisterView::RegisterView(QWidget *parent)
 
 void RegisterView::setupTab(int areaIndex)
 {
-    QTableWidget *t = new QTableWidget(0, 8, this);
+    QTableWidget *t = new QTableWidget(0, 9, this);
     t->setContextMenuPolicy(Qt::CustomContextMenu);
     t->setSelectionBehavior(QAbstractItemView::SelectRows);
     t->setSelectionMode(QAbstractItemView::ExtendedSelection);
     t->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed);
     t->verticalHeader()->setVisible(true);
 
-    t->setHorizontalHeaderLabels({"寄存器名称", "寄存器地址", "数据类型", "字节序",
+    t->setHorizontalHeaderLabels({"寄存器名称", "寄存器地址", "功能码", "数据类型", "字节序",
                                   "原始值", "设定值", "操作", "状态"});
     t->horizontalHeader()->setStretchLastSection(true);
     t->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     t->setColumnWidth(ColName, 120);
-    for (int c = ColAddr; c <= ColStatus; ++c)
+    t->setColumnWidth(ColFunc, 70);
+    for (int c = ColType; c <= ColStatus; ++c)
     {
         t->setColumnWidth(c, 80);
     }
@@ -185,6 +186,10 @@ void RegisterView::fillRow(QTableWidget *t, int areaIndex, int r,
     name->setFlags(name->flags() | Qt::ItemIsEditable);
     t->setItem(r, ColName, name);
     t->setItem(r, ColAddr, makeReadOnlyItem(addrText(rd.protoAddr)));
+    QTableWidgetItem *funcItem = makeReadOnlyItem(
+        QString::number(info.readFunc).rightJustified(2, '0'));
+    funcItem->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    t->setItem(r, ColFunc, funcItem);
     t->setItem(r, ColStatus, makeReadOnlyItem("无效"));
     t->item(r, ColStatus)->setTextColor(Qt::red);
     t->setItem(r, ColRaw, makeReadOnlyItem(""));

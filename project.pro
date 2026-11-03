@@ -49,6 +49,13 @@ HEADERS += \
 
 RC_FILE = res/app.rc
 
-QMAKE_CFLAGS += -std=c11
-QMAKE_CXXFLAGS += -std=c++11
-QMAKE_CXXFLAGS_WARN_ON = -Wall
+win32-g++ {
+    QMAKE_CFLAGS += -std=c11
+    QMAKE_CXXFLAGS += -std=c++11
+    QMAKE_CXXFLAGS_WARN_ON = -Wall
+}
+
+msvc {
+    QMAKE_CFLAGS += /utf-8
+    QMAKE_CXXFLAGS += /utf-8
+}

@@ -13,7 +13,7 @@
 ## 2. 构建环境
 
 - **操作系统**：Windows
-- **编译器**：MinGW 7.3（32 位，C++11 / C11）
+- **编译器**：MSVC 2017（Visual Studio 2017，32 位，C++14）
 - **软件框架**：Qt 5.12.12
 - **依赖**：除 Qt 内置模块（core/gui/widgets/network/serialport）外不使用任何第三方库
 
@@ -112,5 +112,6 @@
 
 ## 5. 构建与运行
 
-项目提供 `build.bat` 快速编译（内部先 `qmake -r` 再 `mingw32-make all`）；
+项目提供 `build.bat` 快速编译：脚本先调用 Visual Studio 2017 的 `vcvarsall.bat x86`
+初始化 MSVC 环境，再执行 `qmake -r` 与 `nmake all`，最后用 `windeployqt` 生成 `dist` 部署目录；
 `run.bat` 可直接运行生成的可执行文件。

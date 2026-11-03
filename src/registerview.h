@@ -103,7 +103,7 @@ private:
     QString valueText(DataType type, qint64 value) const;
     void setValueHex(bool hex);
 
-    enum Col { ColName = 0, ColAddr, ColType, ColByteOrder, ColRaw,
+    enum Col { ColName = 0, ColAddr, ColFunc, ColType, ColByteOrder, ColRaw,
                ColSet, ColWrite, ColStatus
              };
 
