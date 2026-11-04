@@ -96,6 +96,11 @@ private:
     void onAddPointsInArea(int area);
     void onDeleteRowsInArea(int area, QTableWidget *t);
     void onClearArea(int area, QTableWidget *t);
+    void onImportPoints();
+    void onExportPoints();
+    int  addImportedRows(int area, const QList<RowData> &rows);
+    void setRowsType(int area, const QList<int> &rows, DataType type);
+    void setRowsByteOrder(int area, const QList<int> &rows, ByteOrder bo);
     void showAreaMenu(QTableWidget *t, int area, const QPoint &pos);
     void doWrite(int area, QTableWidget *t, QPushButton *btn);
     QString addrText(int protoAddr) const;
