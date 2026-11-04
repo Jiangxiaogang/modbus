@@ -16,6 +16,7 @@ QString errorText(ErrorCode code)
     case ErrorCode::EmptyResponse:      return QString("响应数据为空");
     case ErrorCode::SlaveException:     return QString("从站异常: %1");
     case ErrorCode::FunctionMismatch:   return QString("功能码不匹配 请求0x%1 响应0x%2");
+    case ErrorCode::SlaveMismatch:      return QString("从站地址不匹配 期望%1 实际%2");
     case ErrorCode::ConnectFailed:      return QString("连接失败: %1");
     case ErrorCode::SerialOpenFailed:   return QString("打开串口失败");
     case ErrorCode::SerialWriteFailed:  return QString("串口写入失败");

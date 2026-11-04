@@ -138,6 +138,15 @@ bool ModbusDevice::transact(quint8 func, const QByteArray &txPdu,
         err = errorText(decErr);
         return false;
     }
+    // 从站地址校验：丢弃总线上的其它从站应答、RS-485 回显或被噪声改写的帧，
+    // 避免把不属于本从站的响应当成有效数据。
+    if (slave != (quint8)m_params.slave)
+    {
+        err = errorText(ErrorCode::SlaveMismatch,
+                        QString::number(m_params.slave),
+                        QString::number(slave));
+        return false;
+    }
     if (ModbusCodec::isException(rfunc, func))
     {
         quint8 code = rPdu.isEmpty() ? 0 : (quint8)rPdu[0];

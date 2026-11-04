@@ -39,6 +39,17 @@ ErrorCode TcpTransport::write(const char *data, qint64 len, qint64 *written)
     {
         return ErrorCode::ConnectionLost;
     }
+
+    // 丢弃上一轮超时之后才到达的陈旧应答，避免它被误当成本次请求的响应
+    //（事务号固定，无法靠 MBAP 事务号区分）。注意 flush() 只清发送缓冲，
+    // 不能清接收缓冲，这里必须把接收侧读空：
+    // 先清掉已进入 Qt 缓冲区的内容，再用 0 超时探测一次内核接收缓冲区。
+    m_tcp->readAll();
+    if (m_tcp->waitForReadyRead(0))
+    {
+        m_tcp->readAll();
+    }
+
     qint64 w = m_tcp->write(data, len);
     if (w < 0)
     {

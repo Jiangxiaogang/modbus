@@ -141,7 +141,9 @@ void ModbusWorker::doPoll()
 void ModbusWorker::runReadArea(int areaIndex, const QList<RegPlanItem> &items)
 {
     const AreaInfo &info = areaInfo(areaIndex);
-    int maxQ = (info.readFunc == 1 || info.readFunc == 2) ? 2000 : 125;
+    // 寄存器区按 120 分块：当 32 位点位跨块时 cnt 会再 +1，最大 121，
+    // 仍不超过 FC3/FC4 允许的 125 个寄存器上限。
+    int maxQ = (info.readFunc == 1 || info.readFunc == 2) ? 2000 : 120;
 
     QList<int> addrs;
     for (const RegPlanItem &it : items)

@@ -25,9 +25,7 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
     setWindowTitle(QString("%1 v%2").arg(APP_PRODUCT_NAME).arg(APP_VERSION_STR));
-    setMinimumSize(960, 500);
-    resize(960, 500);
-
+    setMinimumSize(1024, 576);
     QSplitter *split = new QSplitter(Qt::Horizontal, this);
     m_panel = new ConnectionPanel(split);
     m_view  = new RegisterView(split);

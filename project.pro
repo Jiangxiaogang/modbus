@@ -49,6 +49,10 @@ HEADERS += \
 
 RC_FILE = res/app.rc
 
+# 通过链接器的 /MANIFESTINPUT 嵌入应用清单，避免与 link.exe 生成的
+# 清单资源（RT_MANIFEST/id=1）重复，导致 CVT1100 资源重复错误。
+QMAKE_MANIFEST = $$PWD/res/app.manifest
+
 win32-g++ {
     QMAKE_CFLAGS += -std=c11
     QMAKE_CXXFLAGS += -std=c++11

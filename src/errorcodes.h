@@ -14,6 +14,7 @@ enum class ErrorCode
     EmptyResponse,
     SlaveException,
     FunctionMismatch,
+    SlaveMismatch,
     ConnectFailed,
     SerialOpenFailed,
     SerialWriteFailed,
